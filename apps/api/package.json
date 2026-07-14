@@ -1,0 +1,31 @@
+{
+  "name": "@vianova/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun --hot --env-file ../../.env src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun --env-file ../../.env dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1",
+    "@vianova/db": "workspace:*",
+    "@vianova/oidc": "workspace:*",
+    "bullmq": "^5",
+    "drizzle-orm": "^0.44",
+    "elysia": "^1",
+    "nodemailer": "^6",
+    "otpauth": "^9.5.1",
+    "stripe": "^17"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^6",
+    "bun-types": "latest",
+    "typescript": "^5"
+  }
+}

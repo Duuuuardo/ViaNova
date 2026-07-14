@@ -1,0 +1,21 @@
+{
+  "name": "@vianova/client",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elysiajs/eden": "^1",
+    "elysia": "^1"
+  },
+  "devDependencies": {
+    "@vianova/api": "workspace:*",
+    "bun-types": "latest",
+    "typescript": "^5"
+  }
+}

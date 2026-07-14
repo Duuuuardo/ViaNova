@@ -1,0 +1,21 @@
+{
+  "name": "@vianova/oidc",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vianova/db": "workspace:*",
+    "drizzle-orm": "^0.44",
+    "jose": "^6"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "^5"
+  }
+}

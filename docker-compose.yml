@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: vianova
+      POSTGRES_USER: vianova
+      POSTGRES_PASSWORD: vianova_secret
+    volumes:
+      - vianova_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vianova -d vianova"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - vianova_redis_data:/data
+
+volumes:
+  vianova_postgres_data:
+  vianova_redis_data:

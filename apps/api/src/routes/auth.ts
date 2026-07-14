@@ -1,0 +1,500 @@
+import { Elysia, t } from 'elysia'
+import { db, users, emailVerifications, passwordResets, totpSecrets } from '@vianova/db'
+import { eq, and, gt, isNull } from 'drizzle-orm'
+import { generateId, generateToken, hashToken, generateBackupCodes } from '../lib/crypto'
+import { createSession, deleteSession, deleteAllUserSessions, SESSION_COOKIE } from '../lib/session'
+import { sendVerificationEmail, sendPasswordResetEmail } from '../lib/email'
+import { generateTotpSecret, getTotpUri, verifyTotp } from '../lib/totp'
+import { enqueue } from '../lib/queue'
+import { authPlugin } from '../plugins/auth'
+
+export const authRoutes = new Elysia({ prefix: '/auth' })
+  .use(authPlugin)
+
+  .post(
+    '/register',
+    async ({ body, set }) => {
+      const { name, email, password } = body
+
+      const existing = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email.toLowerCase()))
+        .limit(1)
+
+      if (existing.length > 0) {
+        set.status = 409
+        return { message: 'Este email já está em uso.' }
+      }
+
+      const passwordHash = await Bun.password.hash(password, 'argon2id')
+      const userId = generateId()
+
+      await db.insert(users).values({
+        id: userId,
+        email: email.toLowerCase(),
+        passwordHash,
+        name,
+      })
+
+      const token = generateToken()
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+
+      await db.insert(emailVerifications).values({
+        id: generateId(),
+        userId,
+        tokenHash: hashToken(token),
+        expiresAt,
+      })
+
+      const verifyUrl = `${process.env.VIANOVA_WEB_URL}/verify-email?token=${token}`
+      await sendVerificationEmail(email, name, verifyUrl)
+
+      return { message: 'Verifique seu email para ativar a conta.' }
+    },
+    {
+      body: t.Object({
+        name: t.String({ minLength: 1 }),
+        email: t.String({ format: 'email' }),
+        password: t.String({ minLength: 8 }),
+      }),
+    },
+  )
+
+  .post(
+    '/login',
+    async ({ body, set, cookie, request }) => {
+      const { email, password, totpCode } = body
+
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email.toLowerCase()))
+        .limit(1)
+
+      if (!user || !user.passwordHash) {
+        set.status = 401
+        return { message: 'Credenciais inválidas.' }
+      }
+
+      const valid = await Bun.password.verify(password, user.passwordHash)
+      if (!valid) {
+        set.status = 401
+        return { message: 'Credenciais inválidas.' }
+      }
+
+      if (!user.emailVerifiedAt) {
+        set.status = 403
+        return { message: 'Confirme seu email antes de entrar.', code: 'EMAIL_NOT_VERIFIED' }
+      }
+
+      if (user.twoFactorEnabled) {
+        if (!totpCode) {
+          return { requires2FA: true as const }
+        }
+
+        const [totpRow] = await db
+          .select()
+          .from(totpSecrets)
+          .where(eq(totpSecrets.userId, user.id))
+          .limit(1)
+
+        if (!totpRow || !totpRow.verifiedAt) {
+          set.status = 401
+          return { message: 'Código inválido.' }
+        }
+
+        const totpValid = verifyTotp(totpCode, totpRow.secret)
+
+        if (!totpValid) {
+          const backupCodes = totpRow.backupCodes ?? []
+          const codeHash = hashToken(totpCode.toUpperCase())
+          const backupIndex = backupCodes.indexOf(codeHash)
+
+          if (backupIndex === -1) {
+            set.status = 401
+            return { message: 'Código inválido.' }
+          }
+
+          const updatedCodes = [...backupCodes]
+          updatedCodes.splice(backupIndex, 1)
+          await db
+            .update(totpSecrets)
+            .set({ backupCodes: updatedCodes })
+            .where(eq(totpSecrets.userId, user.id))
+        }
+      }
+
+      const ip = request.headers.get('x-forwarded-for') ?? undefined
+      const userAgent = request.headers.get('user-agent') ?? undefined
+      const { token } = await createSession(user.id, ip, userAgent)
+
+      cookie[SESSION_COOKIE].set({
+        value: token,
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 30,
+      })
+
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatarUrl: user.avatarUrl,
+          twoFactorEnabled: user.twoFactorEnabled,
+        },
+      }
+    },
+    {
+      body: t.Object({
+        email: t.String({ format: 'email' }),
+        password: t.String(),
+        totpCode: t.Optional(t.String()),
+      }),
+    },
+  )
+
+  .post('/logout', async ({ session, set, cookie }) => {
+    if (!session) {
+      set.status = 401
+      return { message: 'Não autenticado.' }
+    }
+
+    const token = cookie[SESSION_COOKIE]?.value as string | undefined
+    if (token) {
+      const deletedSessionId = await deleteSession(token)
+      // Single sign-out imediato: derruba a sessão nos produtos via webhook de
+      // revogação; a introspection também passa a responder active: false.
+      if (deletedSessionId) {
+        await enqueue({
+          type: 'session:revoked',
+          userId: session.userId,
+          sessionIds: [deletedSessionId],
+        })
+      }
+    }
+
+    cookie[SESSION_COOKIE].set({ value: '', maxAge: 0, path: '/' })
+
+    return { message: 'Sessão encerrada.' }
+  })
+
+  .get('/me', async ({ session, set }) => {
+    if (!session) {
+      set.status = 401
+      return { message: 'Não autenticado.' }
+    }
+
+    const [user] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        avatarUrl: users.avatarUrl,
+        phone: users.phone,
+        twoFactorEnabled: users.twoFactorEnabled,
+        emailVerifiedAt: users.emailVerifiedAt,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1)
+
+    if (!user) {
+      set.status = 404
+      return { message: 'Usuário não encontrado.' }
+    }
+
+    return { user }
+  })
+
+  .patch(
+    '/profile',
+    async ({ session, body, set }) => {
+      if (!session) {
+        set.status = 401
+        return { message: 'Não autenticado.' }
+      }
+
+      const [user] = await db
+        .update(users)
+        .set({
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl || null } : {}),
+          ...(body.phone !== undefined ? { phone: body.phone || null } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, session.userId))
+        .returning({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          avatarUrl: users.avatarUrl,
+          phone: users.phone,
+          twoFactorEnabled: users.twoFactorEnabled,
+        })
+
+      return { user }
+    },
+    {
+      body: t.Object({
+        name: t.Optional(t.String({ minLength: 1 })),
+        avatarUrl: t.Optional(t.String()),
+        phone: t.Optional(t.String()),
+      }),
+    },
+  )
+
+  .post(
+    '/verify-email',
+    async ({ body, set }) => {
+      const tokenHash = hashToken(body.token)
+      const now = new Date()
+
+      const [verification] = await db
+        .select()
+        .from(emailVerifications)
+        .where(and(eq(emailVerifications.tokenHash, tokenHash), gt(emailVerifications.expiresAt, now)))
+        .limit(1)
+
+      if (!verification) {
+        set.status = 400
+        return { message: 'Token inválido ou expirado.' }
+      }
+
+      await db.update(users).set({ emailVerifiedAt: now }).where(eq(users.id, verification.userId))
+      await db.delete(emailVerifications).where(eq(emailVerifications.id, verification.id))
+
+      return { message: 'Email confirmado com sucesso.' }
+    },
+    { body: t.Object({ token: t.String() }) },
+  )
+
+  .post(
+    '/resend-verification',
+    async ({ body, set }) => {
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, body.email.toLowerCase()))
+        .limit(1)
+
+      if (!user) {
+        return { message: 'Se o email existir, você receberá as instruções.' }
+      }
+
+      if (user.emailVerifiedAt) {
+        set.status = 400
+        return { message: 'Email já verificado.' }
+      }
+
+      // Rate limit: 60s entre reenvios
+      const [recent] = await db
+        .select()
+        .from(emailVerifications)
+        .where(
+          and(
+            eq(emailVerifications.userId, user.id),
+            gt(emailVerifications.createdAt, new Date(Date.now() - 60 * 1000)),
+          ),
+        )
+        .limit(1)
+
+      if (!recent) {
+        await db.delete(emailVerifications).where(eq(emailVerifications.userId, user.id))
+
+        const token = generateToken()
+        await db.insert(emailVerifications).values({
+          id: generateId(),
+          userId: user.id,
+          tokenHash: hashToken(token),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        })
+
+        const verifyUrl = `${process.env.VIANOVA_WEB_URL}/verify-email?token=${token}`
+        await sendVerificationEmail(user.email, user.name, verifyUrl)
+      }
+
+      return { message: 'Se o email existir, você receberá as instruções.' }
+    },
+    { body: t.Object({ email: t.String({ format: 'email' }) }) },
+  )
+
+  .post(
+    '/forgot-password',
+    async ({ body }) => {
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, body.email.toLowerCase()))
+        .limit(1)
+
+      if (user) {
+        const token = generateToken()
+        await db.insert(passwordResets).values({
+          id: generateId(),
+          userId: user.id,
+          tokenHash: hashToken(token),
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        })
+
+        const resetUrl = `${process.env.VIANOVA_WEB_URL}/reset-password?token=${token}`
+        await sendPasswordResetEmail(user.email, user.name, resetUrl)
+      }
+
+      return { message: 'Se o email existir, você receberá as instruções.' }
+    },
+    { body: t.Object({ email: t.String({ format: 'email' }) }) },
+  )
+
+  .post(
+    '/reset-password',
+    async ({ body, set }) => {
+      const tokenHash = hashToken(body.token)
+      const now = new Date()
+
+      const [reset] = await db
+        .select()
+        .from(passwordResets)
+        .where(
+          and(
+            eq(passwordResets.tokenHash, tokenHash),
+            isNull(passwordResets.usedAt),
+            gt(passwordResets.expiresAt, now),
+          ),
+        )
+        .limit(1)
+
+      if (!reset) {
+        set.status = 400
+        return { message: 'Token inválido ou expirado.' }
+      }
+
+      const passwordHash = await Bun.password.hash(body.password, 'argon2id')
+
+      await db.update(users).set({ passwordHash }).where(eq(users.id, reset.userId))
+      await db.update(passwordResets).set({ usedAt: now }).where(eq(passwordResets.id, reset.id))
+
+      const revokedSessionIds = await deleteAllUserSessions(reset.userId)
+      if (revokedSessionIds.length > 0) {
+        await enqueue({ type: 'session:revoked', userId: reset.userId, sessionIds: revokedSessionIds })
+      }
+
+      return { message: 'Senha alterada com sucesso.' }
+    },
+    {
+      body: t.Object({
+        token: t.String(),
+        password: t.String({ minLength: 8 }),
+      }),
+    },
+  )
+
+  .post('/2fa/setup', async ({ session, set }) => {
+    if (!session) {
+      set.status = 401
+      return { message: 'Não autenticado.' }
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1)
+
+    if (!user) {
+      set.status = 404
+      return { message: 'Usuário não encontrado.' }
+    }
+
+    if (user.twoFactorEnabled) {
+      set.status = 400
+      return { message: '2FA já está ativo.' }
+    }
+
+    const secret = generateTotpSecret()
+
+    await db
+      .delete(totpSecrets)
+      .where(and(eq(totpSecrets.userId, user.id), isNull(totpSecrets.verifiedAt)))
+
+    await db.insert(totpSecrets).values({
+      id: generateId(),
+      userId: user.id,
+      secret,
+      verifiedAt: null,
+    })
+
+    return { uri: getTotpUri(user.email, secret), secret }
+  })
+
+  .post(
+    '/2fa/enable',
+    async ({ session, body, set }) => {
+      if (!session) {
+        set.status = 401
+        return { message: 'Não autenticado.' }
+      }
+
+      const [totpRow] = await db
+        .select()
+        .from(totpSecrets)
+        .where(and(eq(totpSecrets.userId, session.userId), isNull(totpSecrets.verifiedAt)))
+        .limit(1)
+
+      if (!totpRow) {
+        set.status = 400
+        return { message: 'Nenhum setup de 2FA encontrado. Inicie o setup novamente.' }
+      }
+
+      if (!verifyTotp(body.code, totpRow.secret)) {
+        set.status = 400
+        return { message: 'Código inválido.' }
+      }
+
+      const plainBackupCodes = generateBackupCodes()
+
+      await db
+        .update(totpSecrets)
+        .set({ verifiedAt: new Date(), backupCodes: plainBackupCodes.map((c) => hashToken(c)) })
+        .where(eq(totpSecrets.id, totpRow.id))
+
+      await db.update(users).set({ twoFactorEnabled: true }).where(eq(users.id, session.userId))
+
+      return { backupCodes: plainBackupCodes }
+    },
+    { body: t.Object({ code: t.String() }) },
+  )
+
+  .post(
+    '/2fa/disable',
+    async ({ session, body, set }) => {
+      if (!session) {
+        set.status = 401
+        return { message: 'Não autenticado.' }
+      }
+
+      const [totpRow] = await db
+        .select()
+        .from(totpSecrets)
+        .where(eq(totpSecrets.userId, session.userId))
+        .limit(1)
+
+      if (!totpRow || !totpRow.verifiedAt) {
+        set.status = 400
+        return { message: '2FA não está ativo.' }
+      }
+
+      if (!verifyTotp(body.code, totpRow.secret)) {
+        const backupCodes = totpRow.backupCodes ?? []
+        if (!backupCodes.includes(hashToken(body.code.toUpperCase()))) {
+          set.status = 401
+          return { message: 'Código inválido.' }
+        }
+      }
+
+      await db.delete(totpSecrets).where(eq(totpSecrets.userId, session.userId))
+      await db.update(users).set({ twoFactorEnabled: false }).where(eq(users.id, session.userId))
+
+      return { message: '2FA desativado.' }
+    },
+    { body: t.Object({ code: t.String() }) },
+  )
