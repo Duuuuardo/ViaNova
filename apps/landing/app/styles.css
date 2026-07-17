@@ -1,0 +1,22 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/overpass';
+@import '@fontsource-variable/public-sans';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@vianova/config/tailwind/base.css';
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-surface text-ink-900 font-sans antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+}

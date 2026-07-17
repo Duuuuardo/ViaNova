@@ -81,6 +81,11 @@ export async function syncEntitlements(productSlug: string, workspaceId: string)
     }
   }
 
+  if (tier === 'free' && productSlug === 'naia') {
+    limits.messagesPerMonth = 3
+    limits.campaignsPerMonth = 1
+  }
+
   await postToProduct(product.apiUrl, '/internal/entitlements', 'service:entitlements:write', productSlug, {
     workspace_id: workspaceId,
     product_slug: productSlug,

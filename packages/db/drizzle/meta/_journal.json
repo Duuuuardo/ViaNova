@@ -8,6 +8,13 @@
       "when": 1784012284501,
       "tag": "0000_green_sandman",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784062246749,
+      "tag": "0001_sticky_bloodscream",
+      "breakpoints": true
     }
   ]
 }

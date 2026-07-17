@@ -1,0 +1,8 @@
+{
+  "name": "@vianova/config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./tailwind/base.css": "./tailwind/base.css"
+  }
+}

@@ -39,12 +39,8 @@ function LoginPage() {
       const { data, error: apiError } = await api.auth.login.post({ email, password })
 
       if (apiError) {
-        const value = apiError.value as { message?: string; code?: string }
-        if (value?.code === 'EMAIL_NOT_VERIFIED') {
-          setError('Confirme seu email antes de entrar. Verifique sua caixa de entrada.')
-        } else {
-          setError(value?.message ?? 'Não foi possível entrar. Tente novamente.')
-        }
+        const value = apiError.value as { message?: string }
+        setError(value?.message ?? 'Não foi possível entrar. Tente novamente.')
         return
       }
 

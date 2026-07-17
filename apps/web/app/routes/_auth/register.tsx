@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../lib/api'
+import { safeOidcRedirect } from '../../lib/redirect'
 import { Button, ErrorNote, Field } from '../../components/ui'
 
 export const Route = createFileRoute('/_auth/register')({
@@ -11,13 +12,13 @@ export const Route = createFileRoute('/_auth/register')({
 })
 
 function RegisterPage() {
+  const router = useRouter()
   const { redirect_uri } = Route.useSearch()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -35,31 +36,20 @@ function RegisterPage() {
         return
       }
 
-      setDone(true)
+      // A conta já nasce logada — a confirmação de email fica como aviso
+      // dentro do app, sem bloquear o primeiro acesso.
+      const oidcRedirect = safeOidcRedirect(redirect_uri)
+      if (oidcRedirect) {
+        window.location.href = oidcRedirect
+        return
+      }
+
+      router.navigate({ to: '/' })
     } catch {
       setError('Não foi possível criar a conta. Tente novamente.')
     } finally {
       setLoading(false)
     }
-  }
-
-  if (done) {
-    return (
-      <>
-        <h1 className="font-display text-2xl font-bold text-ink-900 mb-1">Confirme seu email</h1>
-        <p className="text-sm text-ink-500 mb-6">
-          Enviamos um link de confirmação para <strong className="text-ink-700">{email}</strong>.
-          Abra o link para ativar sua conta.
-        </p>
-        <Link
-          to="/login"
-          search={{ redirect_uri }}
-          className="text-sm text-via-600 hover:text-via-700 font-medium"
-        >
-          Voltar para o login
-        </Link>
-      </>
-    )
   }
 
   return (

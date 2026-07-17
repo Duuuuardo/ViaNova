@@ -24,6 +24,44 @@ services:
     volumes:
       - vianova_redis_data:/data
 
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "9100:9000" # S3 API
+      - "9101:9001" # Console
+    environment:
+      MINIO_ROOT_USER: vianova
+      MINIO_ROOT_PASSWORD: vianova_secret
+    volumes:
+      - vianova_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Cria o bucket de avatares na primeira subida e encerra.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 vianova vianova_secret &&
+      mc mb --ignore-existing local/vianova-avatars
+      "
+
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "1026:1025" # SMTP
+      - "8026:8025" # Web UI
+
 volumes:
   vianova_postgres_data:
   vianova_redis_data:
+  vianova_minio_data:

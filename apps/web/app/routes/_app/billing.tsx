@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { CalendarClock, Package, Undo2 } from 'lucide-react'
 import { api } from '../../lib/api'
-import { Button, Card, ErrorNote, SectionTitle, StatusDot } from '../../components/ui'
+import { Button, Card, ErrorNote, StatusDot } from '../../components/ui'
 
 export const Route = createFileRoute('/_app/billing')({
   component: BillingPage,
@@ -16,18 +17,43 @@ type Overview = {
       workspaceName: string | null
       organizationId: string | null
       status: string
+      cancelAtPeriodEnd: boolean
+      stripeSubscriptionId: string | null
       currentPeriodEnd: string | Date | null
     }
-    plan: { id: string; name: string; tier: string; limits: Record<string, number> } | null
+    plan: {
+      id: string
+      name: string
+      tier: string
+      priceCents: number
+      limits: Record<string, number>
+    } | null
     product: { slug: string; name: string; webUrl: string }
-    addons: { id: string; name: string; quantity: number; unitLabel: string | null }[]
+    addons: {
+      id: string
+      addonTypeId: string
+      name: string
+      quantity: number
+      unitLabel: string | null
+      priceCents: number
+      limitsPerUnit: Record<string, number>
+    }[]
     invoices: {
       id: string
       status: string
       amountPaidCents: number
       hostedInvoiceUrl: string | null
     }[]
+    usage?: Record<string, number> | null
   }[]
+}
+
+function formatPrice(cents: number): string {
+  return `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
+}
+
+function formatDate(value: string | Date): string {
+  return new Date(value).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 const limitLabels: Record<string, string> = {
@@ -62,52 +88,62 @@ function BillingPage() {
   }, [])
 
   if (error) return <ErrorNote>{error}</ErrorNote>
-  if (!overview) return <p className="text-sm text-ink-500">Carregando…</p>
-
-  const orgName = (id: string | null) =>
-    overview.organizations.find((o) => o.id === id)?.name ?? null
+  if (!overview) return <p className="text-sm text-ink-500 animate-pulse">Carregando faturas e uso em tempo real…</p>
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="max-w-3xl space-y-8">
       <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Assinaturas</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight text-ink-900">Assinaturas e Consumo</h1>
         <p className="mt-1 text-sm text-ink-500">
-          Planos e add-ons de todos os produtos, num lugar só. Cada workspace é o titular da sua
-          assinatura.
+          Acompanhe as assinaturas e o consumo dos seus workspaces. O checkout de um novo plano acontece dentro de cada produto.
         </p>
       </div>
 
       {overview.subscriptions.length === 0 ? (
-        <Card className="p-10 text-center">
-          <h2 className="font-display text-lg font-bold">Nenhuma assinatura ainda</h2>
-          <p className="mt-1 text-sm text-ink-500">
-            Quando você assinar um produto — ou criar um workspace num produto e assinar por lá —
-            ele aparece aqui.
+        <Card className="p-10 text-center space-y-3">
+          <h2 className="font-display text-lg font-bold">Nenhuma assinatura ativa</h2>
+          <p className="text-sm text-ink-500 max-w-md mx-auto">
+            Acesse o Naia Campanhas e assine um plano para o seu workspace. Os dados aparecerão aqui.
           </p>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {overview.subscriptions.map((item) => (
-            <SubscriptionCard key={item.subscription.id} item={item} orgName={orgName} />
+            <SubscriptionCard key={item.subscription.id} item={item} onChanged={load} />
           ))}
         </div>
       )}
-
-      <SubscribeSection organizations={overview.organizations} onSubscribed={load} />
     </div>
   )
 }
 
 function SubscriptionCard({
   item,
-  orgName,
+  onChanged,
 }: {
   item: Overview['subscriptions'][number]
-  orgName: (id: string | null) => string | null
+  onChanged: () => Promise<void>
 }) {
   const [portalError, setPortalError] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<string | null>(null)
   const status = statusInfo[item.subscription.status] ?? statusInfo.none
-  const organization = orgName(item.subscription.organizationId)
+
+  const paidActive =
+    Boolean(item.subscription.stripeSubscriptionId) &&
+    ['active', 'past_due', 'trialing'].includes(item.subscription.status)
+
+  const monthlyTotalCents =
+    (item.plan?.priceCents ?? 0) +
+    item.addons.reduce((sum, addon) => sum + addon.priceCents * addon.quantity, 0)
+
+  // Limites efetivos = plano + add-ons, igual ao entitlement sincronizado.
+  const effectiveLimits: Record<string, number> = { ...(item.plan?.limits ?? {}) }
+  for (const addon of item.addons) {
+    for (const [key, perUnit] of Object.entries(addon.limitsPerUnit)) {
+      effectiveLimits[key] = (effectiveLimits[key] ?? 0) + perUnit * addon.quantity
+    }
+  }
 
   async function openPortal() {
     setPortalError(null)
@@ -123,200 +159,240 @@ function SubscriptionCard({
     window.location.href = data.portalUrl!
   }
 
+  async function removeAddon(addonTypeId: string) {
+    setBusy(`addon:${addonTypeId}`)
+    setPortalError(null)
+    setConfirming(null)
+    const { error } = await api.billing
+      .subscriptions({ id: item.subscription.id })
+      .addons({ addonTypeId })
+      .patch({ quantity: 0 })
+    setBusy(null)
+    if (error) {
+      setPortalError((error.value as { message?: string })?.message ?? 'Não foi possível remover o add-on.')
+      return
+    }
+    await onChanged()
+  }
+
+  async function cancelSubscription() {
+    setBusy('cancel')
+    setPortalError(null)
+    setConfirming(null)
+    const { error } = await api.billing.subscriptions({ id: item.subscription.id }).cancel.post()
+    setBusy(null)
+    if (error) {
+      setPortalError((error.value as { message?: string })?.message ?? 'Não foi possível cancelar.')
+      return
+    }
+    await onChanged()
+  }
+
+  async function resumeSubscription() {
+    setBusy('resume')
+    setPortalError(null)
+    const { error } = await api.billing.subscriptions({ id: item.subscription.id }).resume.post()
+    setBusy(null)
+    if (error) {
+      setPortalError((error.value as { message?: string })?.message ?? 'Não foi possível retomar.')
+      return
+    }
+    await onChanged()
+  }
+
   return (
-    <Card className="p-6 space-y-4">
-      <div className="flex items-start justify-between gap-4">
+    <Card className="p-6 space-y-6 border border-line shadow-xs hover:shadow-md transition-all duration-300">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h3 className="font-display text-lg font-bold">{item.product.name}</h3>
-            <span className="flex items-center gap-1.5 text-xs text-ink-500">
+          <div className="flex items-center gap-2.5">
+            <h3 className="font-display text-xl font-bold text-ink-900">{item.product.name}</h3>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-paper border border-line">
               <StatusDot tone={status.tone} /> {status.label}
             </span>
           </div>
-          <p className="text-sm text-ink-500 mt-0.5">
-            Workspace{' '}
-            <span className="font-mono text-xs">
-              {item.subscription.workspaceName ?? item.subscription.workspaceId}
-            </span>
-            {organization && <> · Organização {organization}</>}
+          <p className="text-sm text-ink-500 mt-1">
+            Workspace: <span className="font-mono font-medium text-ink-800 bg-paper px-2 py-0.5 rounded border border-line">{item.subscription.workspaceName ?? item.subscription.workspaceId}</span>
           </p>
         </div>
-        <Button variant="secondary" onClick={openPortal}>
-          Gerenciar
+        <Button variant="secondary" onClick={openPortal} className="shrink-0 font-medium">
+          Portal Stripe de Faturas
         </Button>
       </div>
 
       {portalError && <ErrorNote>{portalError}</ErrorNote>}
 
       {item.plan && (
-        <div>
-          <p className="text-sm font-medium mb-2">
-            Plano {item.plan.name}
-            {item.addons.length > 0 && (
-              <span className="text-ink-500 font-normal">
-                {' '}
-                + {item.addons.map((a) => `${a.quantity}× ${a.name}`).join(', ')}
+        <div className="space-y-4 pt-2 border-t border-line/60">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-baseline gap-2.5 flex-wrap text-sm">
+              <span className="font-bold text-ink-900 uppercase tracking-wide text-xs">Plano:</span>
+              <span className="font-semibold text-via-600 bg-via-500/10 px-2.5 py-0.5 rounded text-sm">
+                {item.plan.name}
+              </span>
+              {monthlyTotalCents > 0 && (
+                <span className="text-ink-500 text-xs">
+                  {formatPrice(monthlyTotalCents)}/mês
+                  {item.addons.length > 0 && ' com add-ons'}
+                </span>
+              )}
+              {paidActive && item.subscription.currentPeriodEnd && (
+                <span className="text-ink-400 text-xs">
+                  {item.subscription.cancelAtPeriodEnd
+                    ? `· ativa até ${formatDate(item.subscription.currentPeriodEnd)}`
+                    : `· renova em ${formatDate(item.subscription.currentPeriodEnd)}`}
+                </span>
+              )}
+            </div>
+            {item.usage && (
+              <span className="text-xs text-emerald-600 font-medium inline-flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-emerald-500 animate-pulse" /> Consumo em tempo real
               </span>
             )}
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Object.entries(item.plan.limits).map(([key, limit]) => (
-              <div key={key} className="bg-paper rounded-ctrl px-3 py-2">
-                <p className="text-xs text-ink-500">{limitLabels[key] ?? key}</p>
-                <p className="font-mono text-sm font-medium">
-                  <span className="text-ink-400">— de </span>
-                  {limit.toLocaleString('pt-BR')}
-                </p>
-              </div>
-            ))}
           </div>
-          <p className="mt-2 text-xs text-ink-400">
-            Uso aparece aqui quando o produto estiver conectado.
-          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {Object.entries(effectiveLimits).map(([key, limit]) => {
+              const currentUsage = item.usage ? (item.usage[key] ?? 0) : null
+              const percent = currentUsage !== null && limit > 0 ? Math.min(100, Math.round((currentUsage / limit) * 100)) : 0
+              return (
+                <div key={key} className="bg-paper rounded-ctrl px-3.5 py-3 border border-line/70 flex flex-col justify-between shadow-2xs hover:border-via-500/40 transition-colors">
+                  <div>
+                    <p className="text-[11px] font-bold text-ink-500 uppercase tracking-wider">{limitLabels[key] ?? key}</p>
+                    <p className="font-mono text-base font-bold text-ink-900 mt-1">
+                      {currentUsage !== null ? (
+                        <span className="text-via-600">{currentUsage.toLocaleString('pt-BR')}</span>
+                      ) : (
+                        <span className="text-ink-400">—</span>
+                      )}
+                      <span className="text-ink-400 font-normal text-xs"> / {limit.toLocaleString('pt-BR')}</span>
+                    </p>
+                  </div>
+                  {currentUsage !== null && (
+                    <div className="w-full bg-line/80 h-1.5 rounded-full overflow-hidden mt-3">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          percent > 85 ? 'bg-error-500' : percent > 60 ? 'bg-amber-500' : 'bg-via-500'
+                        }`}
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {!item.usage && (
+            <p className="text-xs text-ink-400 italic">
+              Conecte ou acesse o produto para iniciar o censo automático dos limites do seu workspace.
+            </p>
+          )}
+
+          {item.addons.length > 0 && (
+            <div className="pt-4 border-t border-line/60 space-y-2">
+              <p className="text-xs font-bold text-ink-900 uppercase tracking-wide">Add-ons ativos</p>
+              <ul className="space-y-1.5">
+                {item.addons.map((addon) => (
+                  <li
+                    key={addon.id}
+                    className="flex items-center gap-3 rounded-ctrl border border-line/70 bg-paper px-3.5 py-2.5"
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-ctrl bg-via-500/10 text-via-600">
+                      <Package size={15} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-ink-900">
+                        {addon.quantity}× {addon.name}
+                      </p>
+                      <p className="text-xs text-ink-500">
+                        {formatPrice(addon.priceCents * addon.quantity)}/mês
+                        {addon.unitLabel ? ` — ${formatPrice(addon.priceCents)} por ${addon.unitLabel}` : ''}
+                      </p>
+                    </div>
+                    {confirming === `addon:${addon.addonTypeId}` ? (
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs text-ink-500 hidden sm:inline">
+                          Sai da próxima fatura; o já pago vale até o fim do ciclo.
+                        </span>
+                        <Button
+                          variant="danger"
+                          className="h-8 px-3 text-xs"
+                          loading={busy === `addon:${addon.addonTypeId}`}
+                          onClick={() => removeAddon(addon.addonTypeId)}
+                        >
+                          Remover
+                        </Button>
+                        <button
+                          onClick={() => setConfirming(null)}
+                          className="text-xs font-medium text-ink-500 hover:text-ink-900 transition-colors"
+                        >
+                          Voltar
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setConfirming(`addon:${addon.addonTypeId}`)}
+                        className="shrink-0 text-xs font-medium text-ink-400 hover:text-error-600 transition-colors"
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {paidActive && (
+            <div className="pt-4 border-t border-line/60 flex items-center justify-between gap-3 flex-wrap">
+              {item.subscription.cancelAtPeriodEnd ? (
+                <>
+                  <p className="text-xs text-ink-500 flex items-center gap-1.5">
+                    <CalendarClock size={13} className="text-amber-500 shrink-0" aria-hidden="true" />
+                    Cancelamento agendado — o workspace volta ao plano grátis no fim do período.
+                  </p>
+                  <Button
+                    variant="secondary"
+                    className="h-8 px-3 text-xs gap-1.5"
+                    loading={busy === 'resume'}
+                    onClick={resumeSubscription}
+                  >
+                    <Undo2 size={13} aria-hidden="true" />
+                    Retomar assinatura
+                  </Button>
+                </>
+              ) : confirming === 'cancel' ? (
+                <div className="flex items-center gap-2 flex-wrap ml-auto">
+                  <span className="text-xs text-ink-500">
+                    O plano segue ativo até o fim do período pago. Confirmar?
+                  </span>
+                  <Button
+                    variant="danger"
+                    className="h-8 px-3 text-xs"
+                    loading={busy === 'cancel'}
+                    onClick={cancelSubscription}
+                  >
+                    Cancelar assinatura
+                  </Button>
+                  <button
+                    onClick={() => setConfirming(null)}
+                    className="text-xs font-medium text-ink-500 hover:text-ink-900 transition-colors"
+                  >
+                    Voltar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirming('cancel')}
+                  className="ml-auto text-xs font-medium text-ink-400 hover:text-error-600 transition-colors"
+                >
+                  Cancelar assinatura
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </Card>
   )
 }
 
-// Assinar um produto direto pelo portal. Em produção o caminho comum é o
-// inverso — o produto redireciona pra cá com o workspace dele.
-function SubscribeSection({
-  organizations,
-  onSubscribed,
-}: {
-  organizations: { id: string; name: string }[]
-  onSubscribed: () => void
-}) {
-  const [plans, setPlans] = useState<
-    { id: string; name: string; tier: string; priceCents: number; limits: Record<string, number> }[]
-  >([])
-  const [productName, setProductName] = useState('')
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
-  const [organizationId, setOrganizationId] = useState<string>('')
-  const [workspaceName, setWorkspaceName] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    api.products({ slug: 'naia' }).plans.get().then(({ data }) => {
-      if (data && 'plans' in data && data.plans) {
-        setPlans(data.plans)
-        setProductName(data.product?.name ?? 'Naia')
-      }
-    })
-  }, [])
-
-  async function handleSubscribe(e: React.FormEvent) {
-    e.preventDefault()
-    if (!selectedPlan) {
-      setError('Escolha um plano.')
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const { data, error: apiError } = await api.billing.checkout.post({
-        product_slug: 'naia',
-        // Placeholder do Milestone 1: o workspace real passa a existir quando o
-        // produto estiver de pé; até lá o ID é gerado aqui para testes.
-        workspace_id: crypto.randomUUID(),
-        workspace_name: workspaceName || undefined,
-        plan_id: selectedPlan,
-        organization_id: organizationId || undefined,
-      })
-
-      if (apiError) {
-        setError(
-          (apiError.value as { message?: string })?.message ?? 'Não foi possível assinar.',
-        )
-        return
-      }
-
-      if (data && 'checkoutUrl' in data && data.checkoutUrl) {
-        window.location.href = data.checkoutUrl
-        return
-      }
-
-      onSubscribed()
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (plans.length === 0) return null
-
-  return (
-    <section className="space-y-3">
-      <SectionTitle>Assinar {productName}</SectionTitle>
-      <Card className="p-6">
-        <form onSubmit={handleSubscribe} className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-3">
-            {plans.map((plan) => (
-              <button
-                key={plan.id}
-                type="button"
-                onClick={() => setSelectedPlan(plan.id)}
-                aria-pressed={selectedPlan === plan.id}
-                className={`text-left rounded-card border p-4 transition-colors ${
-                  selectedPlan === plan.id
-                    ? 'border-via-600 ring-2 ring-via-100'
-                    : 'border-line hover:border-line-strong'
-                }`}
-              >
-                <p className="font-display font-bold">{plan.name}</p>
-                <p className="font-mono text-sm mt-1">
-                  {plan.priceCents === 0
-                    ? 'R$ 0/mês'
-                    : `R$ ${(plan.priceCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês`}
-                </p>
-                <ul className="mt-3 space-y-1 text-xs text-ink-500">
-                  {Object.entries(plan.limits).map(([key, limit]) => (
-                    <li key={key}>
-                      {limit.toLocaleString('pt-BR')} {(limitLabels[key] ?? key).toLowerCase()}
-                    </li>
-                  ))}
-                </ul>
-              </button>
-            ))}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="ws-name">Nome do workspace</label>
-              <input
-                id="ws-name"
-                type="text"
-                value={workspaceName}
-                onChange={(e) => setWorkspaceName(e.target.value)}
-                placeholder="Meu workspace"
-              />
-            </div>
-            <div>
-              <label htmlFor="org">Organização (opcional)</label>
-              <select
-                id="org"
-                value={organizationId}
-                onChange={(e) => setOrganizationId(e.target.value)}
-                className="w-full h-10 px-3 rounded-ctrl border border-line-strong bg-surface text-ink-900 outline-none focus:border-via-600 focus:ring-2 focus:ring-via-100"
-              >
-                <option value="">Sem organização</option>
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {error && <ErrorNote>{error}</ErrorNote>}
-
-          <Button type="submit" loading={loading}>
-            Assinar
-          </Button>
-        </form>
-      </Card>
-    </section>
-  )
-}

@@ -169,7 +169,7 @@ function OrganizationDetailPage() {
           <SectionTitle>Zona de risco</SectionTitle>
           <Card className="p-4 flex items-center justify-between">
             <p className="text-sm text-ink-500">
-              Excluir a organização não afeta os workspaces dos produtos — apenas o agrupamento.
+              Excluir a organização não afeta os workspaces dos produtos, apenas o agrupamento.
             </p>
             <Button variant="danger" onClick={handleDelete}>
               Excluir organização

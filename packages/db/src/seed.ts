@@ -15,9 +15,9 @@ async function seed() {
     .insert(productCatalog)
     .values({
       slug: 'naia',
-      name: 'Naia',
+      name: 'Naia Campanhas',
       domain: 'naia.website',
-      description: 'Campaigns — disparo de mensagens em massa via Telegram e WhatsApp.',
+      description: 'Campanhas — disparo de mensagens em massa via Telegram e WhatsApp.',
       icon: 'naia',
       webUrl: process.env.NAIA_WEB_URL ?? 'http://localhost:3001',
       apiUrl: process.env.NAIA_API_URL ?? 'http://localhost:4001',
@@ -31,7 +31,7 @@ async function seed() {
     .onConflictDoUpdate({
       target: productCatalog.slug,
       set: {
-        name: 'Naia',
+        name: 'Naia Campanhas',
         domain: 'naia.website',
         oidcClientSecretHash: hashSecret(NAIA_DEV_CLIENT_SECRET),
         redirectUris: ['http://localhost:3001/auth/callback', 'http://localhost:9999/callback'],
@@ -47,7 +47,7 @@ async function seed() {
       description: 'Para experimentar o Naia.',
       priceCents: 0,
       stripePriceId: process.env.NAIA_STRIPE_PRICE_FREE ?? null,
-      limits: { seats: 1, connections: 1, messagesPerMonth: 100, campaignsPerMonth: 2 },
+      limits: { seats: 1, connections: 1, messagesPerMonth: 3, campaignsPerMonth: 1 },
       sortOrder: 0,
     },
     {
@@ -75,30 +75,54 @@ async function seed() {
   ]
 
   for (const plan of plans) {
+    // Re-runs não zeram o stripePriceId gravado pelo bootstrap do Stripe.
+    const { stripePriceId, ...rest } = plan
     await db
       .insert(productPlans)
       .values(plan)
-      .onConflictDoUpdate({ target: productPlans.id, set: plan })
+      .onConflictDoUpdate({
+        target: productPlans.id,
+        set: stripePriceId ? plan : rest,
+      })
   }
 
-  const addon = {
-    id: 'naia-extra-campaigns',
-    productSlug: 'naia',
-    key: 'extra_campaigns',
-    name: 'Campanhas extras',
-    description: 'Pacote de 10 campanhas adicionais por mês.',
-    unitLabel: 'pacote de 10 campanhas',
-    priceCents: 4700,
-    stripePriceId: process.env.NAIA_STRIPE_PRICE_EXTRA_CAMPAIGNS ?? null,
-    limitsPerUnit: { campaignsPerMonth: 10 },
+  const addons = [
+    {
+      id: 'naia-extra-campaigns',
+      productSlug: 'naia',
+      key: 'extra_campaigns',
+      name: 'Campanhas extras',
+      description: 'Pacote de 10 campanhas adicionais por mês.',
+      unitLabel: 'pacote de 10 campanhas',
+      priceCents: 4700,
+      stripePriceId: process.env.NAIA_STRIPE_PRICE_EXTRA_CAMPAIGNS ?? null,
+      limitsPerUnit: { campaignsPerMonth: 10 },
+    },
+    {
+      id: 'naia-extra-seats',
+      productSlug: 'naia',
+      key: 'extra_seats',
+      name: 'Assentos extras',
+      description: 'Um assento adicional para convidar mais um membro ao workspace.',
+      unitLabel: 'assento',
+      priceCents: 1900,
+      stripePriceId: process.env.NAIA_STRIPE_PRICE_EXTRA_SEATS ?? null,
+      limitsPerUnit: { seats: 1 },
+    },
+  ]
+
+  for (const addon of addons) {
+    const { stripePriceId, ...rest } = addon
+    await db
+      .insert(productAddonTypes)
+      .values(addon)
+      .onConflictDoUpdate({
+        target: productAddonTypes.id,
+        set: stripePriceId ? addon : rest,
+      })
   }
 
-  await db
-    .insert(productAddonTypes)
-    .values(addon)
-    .onConflictDoUpdate({ target: productAddonTypes.id, set: addon })
-
-  console.log('Seed concluído: produto naia + planos + add-on.')
+  console.log('Seed concluído: produto naia + planos + add-ons.')
   process.exit(0)
 }
 

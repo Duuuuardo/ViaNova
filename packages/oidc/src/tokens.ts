@@ -9,7 +9,13 @@ const USER_TOKEN_TTL_SECONDS = 60 * 60 // 1h
 const SERVICE_TOKEN_TTL_SECONDS = 5 * 60 // 5min — escopado e de vida curta
 
 export interface UserTokenInput {
-  user: { id: string; email: string; name: string }
+  user: {
+    id: string
+    email: string
+    name: string
+    avatarUrl?: string | null
+    avatarFrame?: string | null
+  }
   sessionId: string
   clientSlug: string
   nonce?: string | null
@@ -23,6 +29,10 @@ export async function signUserToken({ user, sessionId, clientSlug, nonce }: User
   const jwt = new SignJWT({
     email: user.email,
     name: user.name,
+    // Avatar servido pelo MinIO do Vianova — produtos exibem a URL, nunca
+    // armazenam a imagem nem falam com o storage direto.
+    ...(user.avatarUrl ? { picture: user.avatarUrl } : {}),
+    ...(user.avatarFrame ? { picture_frame: user.avatarFrame } : {}),
     sid: sessionId,
     ...(nonce ? { nonce } : {}),
   })

@@ -62,5 +62,15 @@ export const catalogRoutes = new Elysia({ prefix: '/products' })
       .from(productAddonTypes)
       .where(and(eq(productAddonTypes.productSlug, params.slug), eq(productAddonTypes.isActive, true)))
 
-    return { product, plans, addons }
+    const sanitizedPlans = plans.map((p) => {
+      if (params.slug === 'naia' && p.tier === 'free') {
+        return {
+          ...p,
+          limits: { ...p.limits, messagesPerMonth: 3, campaignsPerMonth: 1 },
+        }
+      }
+      return p
+    })
+
+    return { product, plans: sanitizedPlans, addons }
   })

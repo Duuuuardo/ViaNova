@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia'
-import { db, users, emailVerifications, passwordResets, totpSecrets } from '@vianova/db'
-import { eq, and, gt, isNull } from 'drizzle-orm'
+import { db, users, emailVerifications, passwordResets, totpSecrets, sessions } from '@vianova/db'
+import { eq, and, gt, isNull, ne } from 'drizzle-orm'
 import { generateId, generateToken, hashToken, generateBackupCodes } from '../lib/crypto'
 import { createSession, deleteSession, deleteAllUserSessions, SESSION_COOKIE } from '../lib/session'
 import { sendVerificationEmail, sendPasswordResetEmail } from '../lib/email'
@@ -13,7 +13,7 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 
   .post(
     '/register',
-    async ({ body, set }) => {
+    async ({ body, set, cookie, request }) => {
       const { name, email, password } = body
 
       const existing = await db
@@ -50,7 +50,30 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
       const verifyUrl = `${process.env.VIANOVA_WEB_URL}/verify-email?token=${token}`
       await sendVerificationEmail(email, name, verifyUrl)
 
-      return { message: 'Verifique seu email para ativar a conta.' }
+      // A conta nasce logada — a verificação de email não bloqueia o acesso,
+      // só mantém o aviso na interface até o link ser confirmado.
+      const ip = request.headers.get('x-forwarded-for') ?? undefined
+      const userAgent = request.headers.get('user-agent') ?? undefined
+      const { token: sessionToken } = await createSession(userId, ip, userAgent)
+
+      cookie[SESSION_COOKIE].set({
+        value: sessionToken,
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 30,
+      })
+
+      return {
+        user: {
+          id: userId,
+          name,
+          email: email.toLowerCase(),
+          avatarUrl: null,
+          avatarFrame: 'none',
+          twoFactorEnabled: false,
+        },
+      }
     },
     {
       body: t.Object({
@@ -81,11 +104,6 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
       if (!valid) {
         set.status = 401
         return { message: 'Credenciais inválidas.' }
-      }
-
-      if (!user.emailVerifiedAt) {
-        set.status = 403
-        return { message: 'Confirme seu email antes de entrar.', code: 'EMAIL_NOT_VERIFIED' }
       }
 
       if (user.twoFactorEnabled) {
@@ -143,6 +161,7 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
           name: user.name,
           email: user.email,
           avatarUrl: user.avatarUrl,
+          avatarFrame: user.avatarFrame,
           twoFactorEnabled: user.twoFactorEnabled,
         },
       }
@@ -193,9 +212,17 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         name: users.name,
         email: users.email,
         avatarUrl: users.avatarUrl,
+        avatarFrame: users.avatarFrame,
         phone: users.phone,
+        jobTitle: users.jobTitle,
+        department: users.department,
+        location: users.location,
+        timezone: users.timezone,
+        locale: users.locale,
         twoFactorEnabled: users.twoFactorEnabled,
         emailVerifiedAt: users.emailVerifiedAt,
+        scheduledForDeletionAt: users.scheduledForDeletionAt,
+        status: users.status,
         createdAt: users.createdAt,
       })
       .from(users)
@@ -222,8 +249,14 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         .update(users)
         .set({
           ...(body.name !== undefined ? { name: body.name } : {}),
-          ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl || null } : {}),
+          ...(body.avatarFrame !== undefined ? { avatarFrame: body.avatarFrame } : {}),
           ...(body.phone !== undefined ? { phone: body.phone || null } : {}),
+          ...(body.jobTitle !== undefined ? { jobTitle: body.jobTitle || null } : {}),
+          ...(body.department !== undefined ? { department: body.department || null } : {}),
+          ...(body.location !== undefined ? { location: body.location || null } : {}),
+          ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+          ...(body.locale !== undefined ? { locale: body.locale } : {}),
+          ...(body.preferences !== undefined ? { preferences: body.preferences } : {}),
           updatedAt: new Date(),
         })
         .where(eq(users.id, session.userId))
@@ -232,8 +265,17 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
           name: users.name,
           email: users.email,
           avatarUrl: users.avatarUrl,
+          avatarFrame: users.avatarFrame,
           phone: users.phone,
+          jobTitle: users.jobTitle,
+          department: users.department,
+          location: users.location,
+          timezone: users.timezone,
+          locale: users.locale,
+          preferences: users.preferences,
           twoFactorEnabled: users.twoFactorEnabled,
+          scheduledForDeletionAt: users.scheduledForDeletionAt,
+          status: users.status,
         })
 
       return { user }
@@ -241,8 +283,25 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     {
       body: t.Object({
         name: t.Optional(t.String({ minLength: 1 })),
-        avatarUrl: t.Optional(t.String()),
+        // Foto entra só via POST /account/avatar (MinIO) — aqui só a moldura.
+        avatarFrame: t.Optional(
+          t.Union([t.Literal('none'), t.Literal('via'), t.Literal('gradient')]),
+        ),
         phone: t.Optional(t.String()),
+        jobTitle: t.Optional(t.String()),
+        department: t.Optional(t.String()),
+        location: t.Optional(t.String()),
+        timezone: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        preferences: t.Optional(
+          t.Object({
+            theme: t.Optional(t.Union([t.Literal('system'), t.Literal('light'), t.Literal('dark')])),
+            reducedMotion: t.Optional(t.Boolean()),
+            billingAlerts: t.Optional(t.Boolean()),
+            securityAlerts: t.Optional(t.Boolean()),
+            marketingEmails: t.Optional(t.Boolean()),
+          })
+        ),
       }),
     },
   )
@@ -498,3 +557,147 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     },
     { body: t.Object({ code: t.String() }) },
   )
+
+  .post(
+    '/change-password',
+    async ({ session, body, set }) => {
+      if (!session) {
+        set.status = 401
+        return { message: 'Não autenticado.' }
+      }
+
+      const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1)
+      if (!user || !user.passwordHash) {
+        set.status = 400
+        return { message: 'Conta sem senha configurada.' }
+      }
+
+      const valid = await Bun.password.verify(body.currentPassword, user.passwordHash)
+      if (!valid) {
+        set.status = 400
+        return { message: 'A senha atual está incorreta.' }
+      }
+
+      const passwordHash = await Bun.password.hash(body.newPassword, 'argon2id')
+      await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, session.userId))
+
+      return { message: 'Senha alterada com sucesso.' }
+    },
+    {
+      body: t.Object({
+        currentPassword: t.String(),
+        newPassword: t.String({ minLength: 8 }),
+      }),
+    },
+  )
+
+  .get('/sessions', async ({ session, set }) => {
+    if (!session) {
+      set.status = 401
+      return { message: 'Não autenticado.' }
+    }
+
+    const rows = await db
+      .select({
+        id: sessions.id,
+        ip: sessions.ip,
+        userAgent: sessions.userAgent,
+        createdAt: sessions.createdAt,
+        expiresAt: sessions.expiresAt,
+      })
+      .from(sessions)
+      .where(eq(sessions.userId, session.userId))
+
+    const formattedSessions = rows.map((s) => ({
+      ...s,
+      isCurrent: s.id === session.sessionId,
+    }))
+
+    return { sessions: formattedSessions }
+  })
+
+  .post('/sessions/revoke-all', async ({ session, set }) => {
+    if (!session) {
+      set.status = 401
+      return { message: 'Não autenticado.' }
+    }
+
+    await db
+      .delete(sessions)
+      .where(and(eq(sessions.userId, session.userId), ne(sessions.id, session.sessionId)))
+
+    return { message: 'Todas as outras sessões foram encerradas.' }
+  })
+
+  .delete(
+    '/sessions/:id',
+    async ({ session, params, set }) => {
+      if (!session) {
+        set.status = 401
+        return { message: 'Não autenticado.' }
+      }
+
+      if (params.id === session.sessionId) {
+        set.status = 400
+        return { message: 'Não é possível encerrar sua sessão atual por este botão.' }
+      }
+
+      await db
+        .delete(sessions)
+        .where(and(eq(sessions.id, params.id), eq(sessions.userId, session.userId)))
+
+      return { message: 'Sessão encerrada com sucesso.' }
+    },
+    { params: t.Object({ id: t.String() }) }
+  )
+
+  .post(
+    '/delete-account',
+    async ({ session, body, set }) => {
+      if (!session) {
+        set.status = 401
+        return { message: 'Não autenticado.' }
+      }
+
+      const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1)
+      if (!user) {
+        set.status = 404
+        return { message: 'Usuário não encontrado.' }
+      }
+
+      if (body.password && user.passwordHash) {
+        const valid = await Bun.password.verify(body.password, user.passwordHash)
+        if (!valid) {
+          set.status = 400
+          return { message: 'Senha incorreta.' }
+        }
+      }
+
+      const scheduledDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
+      await db
+        .update(users)
+        .set({ scheduledForDeletionAt: scheduledDate, status: 'pending_deletion', updatedAt: new Date() })
+        .where(eq(users.id, session.userId))
+
+      return { scheduledForDeletionAt: scheduledDate, message: 'Conta agendada para exclusão em 15 dias.' }
+    },
+    {
+      body: t.Object({
+        password: t.Optional(t.String()),
+      }),
+    },
+  )
+
+  .post('/cancel-delete-account', async ({ session, set }) => {
+    if (!session) {
+      set.status = 401
+      return { message: 'Não autenticado.' }
+    }
+
+    await db
+      .update(users)
+      .set({ scheduledForDeletionAt: null, status: 'active', updatedAt: new Date() })
+      .where(eq(users.id, session.userId))
+
+    return { message: 'Agendamento de exclusão cancelado. Conta reativada.' }
+  })

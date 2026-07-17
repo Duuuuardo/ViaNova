@@ -1,6 +1,7 @@
 import { createFileRoute, useRouter, getRouteApi } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import QRCode from 'react-qr-code'
+import { KeyRound, ShieldCheck, Smartphone, Laptop, LogOut, ShieldAlert, Check, X, AlertCircle } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button, Card, ErrorNote, Field } from '../../components/ui'
 
@@ -10,20 +11,408 @@ export const Route = createFileRoute('/_app/security')({
 
 const appRoute = getRouteApi('/_app')
 
+type SessionItem = {
+  id: string
+  ip: string | null
+  userAgent: string | null
+  createdAt: string | Date
+  expiresAt: string | Date
+  isCurrent: boolean
+}
+
 function SecurityPage() {
   const { user } = appRoute.useRouteContext()
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState<'password' | '2fa' | 'sessions' | 'danger'>('password')
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+
+  // Cancela agendamento de exclusão
+  const [canceling, setCanceling] = useState(false)
+  async function handleCancelDeletion() {
+    setCanceling(true)
+    try {
+      await api.auth['cancel-delete-account'].post()
+      router.invalidate()
+    } finally {
+      setCanceling(false)
+    }
+  }
 
   return (
-    <div className="max-w-xl space-y-8">
-      <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Segurança</h1>
-        <p className="mt-1 text-sm text-ink-500">
-          Esta conta abre todos os produtos — proteja-a com verificação em duas etapas.
+    <div className="max-w-4xl space-y-8 pb-16">
+      {/* Header */}
+      <div className="pb-6 border-b border-line">
+        <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink-900">Segurança da Conta</h1>
+        <p className="mt-1 text-sm text-ink-500 max-w-xl">
+          Gerencie sua senha, dispositivos ativos, verificação em duas etapas e opções de carência e encerramento da sua conta.
         </p>
       </div>
 
-      {user.twoFactorEnabled ? <DisableTwoFactor /> : <EnableTwoFactor />}
+      {/* Alerta de Carência de 15 Dias (se agendado) */}
+      {user.scheduledForDeletionAt && (
+        <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-amber-900">
+                Sua conta está em período de carência e agendada para exclusão definitiva.
+              </p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Data programada: {new Date(user.scheduledForDeletionAt).toLocaleDateString('pt-BR')} às {new Date(user.scheduledForDeletionAt).toLocaleTimeString('pt-BR')}.
+                Durante os 15 dias de carência, você pode reativar sua conta e cancelar a exclusão com um clique.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleCancelDeletion}
+            loading={canceling}
+            className="shrink-0 font-bold border-amber-400 text-amber-900 hover:bg-amber-100"
+          >
+            Cancelar exclusão (Reativar conta)
+          </Button>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 border-b border-line overflow-x-auto pb-px scrollbar-none">
+        <button
+          type="button"
+          onClick={() => setActiveTab('password')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
+            activeTab === 'password'
+              ? 'border-via-600 text-via-600 bg-via-500/5'
+              : 'border-transparent text-ink-500 hover:text-ink-900 hover:bg-surface/60'
+          }`}
+        >
+          <KeyRound size={16} className={activeTab === 'password' ? 'text-via-600' : 'text-ink-400'} />
+          Alterar Senha
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('2fa')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
+            activeTab === '2fa'
+              ? 'border-via-600 text-via-600 bg-via-500/5'
+              : 'border-transparent text-ink-500 hover:text-ink-900 hover:bg-surface/60'
+          }`}
+        >
+          <ShieldCheck size={16} className={activeTab === '2fa' ? 'text-via-600' : 'text-ink-400'} />
+          Verificação em Duas Etapas (2FA)
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('sessions')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
+            activeTab === 'sessions'
+              ? 'border-via-600 text-via-600 bg-via-500/5'
+              : 'border-transparent text-ink-500 hover:text-ink-900 hover:bg-surface/60'
+          }`}
+        >
+          <Laptop size={16} className={activeTab === 'sessions' ? 'text-via-600' : 'text-ink-400'} />
+          Sessões e Dispositivos
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('danger')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
+            activeTab === 'danger'
+              ? 'border-red-600 text-red-600 bg-red-500/5'
+              : 'border-transparent text-ink-500 hover:text-ink-900 hover:bg-surface/60'
+          }`}
+        >
+          <ShieldAlert size={16} className={activeTab === 'danger' ? 'text-red-600' : 'text-ink-400'} />
+          Encerramento de Conta
+        </button>
+      </div>
+
+      {/* Tab 1: Alterar Senha */}
+      {activeTab === 'password' && <ChangePasswordSection />}
+
+      {/* Tab 2: 2FA */}
+      {activeTab === '2fa' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {user.twoFactorEnabled ? <DisableTwoFactor /> : <EnableTwoFactor />}
+        </div>
+      )}
+
+      {/* Tab 3: Sessões Ativas */}
+      {activeTab === 'sessions' && <SessionsSection />}
+
+      {/* Tab 4: Danger Zone / Exclusão de Conta */}
+      {activeTab === 'danger' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <Card className="p-6 space-y-4 border-red-200 bg-red-50/20">
+            <div className="flex items-center gap-2 text-red-800 font-display font-bold text-lg">
+              <ShieldAlert size={20} className="text-red-600" />
+              <span>Agendar Exclusão Definitiva (Período de Carência)</span>
+            </div>
+            <p className="text-sm text-ink-600 leading-relaxed max-w-2xl">
+              Ao solicitar a exclusão, sua conta não é removida instantaneamente. Ela é marcada com uma <strong>carência de 15 dias</strong> para segurança e prevenção contra exclusões acidentais.
+              Durante esse período, sua conta permanece inativa, e você pode cancelar o agendamento a qualquer momento logando na plataforma.
+            </p>
+
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setDeleteModalOpen(true)}
+                className="text-red-600 border-red-300 hover:bg-red-50 font-bold"
+              >
+                Solicitar exclusão da conta (15 dias de carência)
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Modal de Exclusão com Carência */}
+      {deleteModalOpen && (
+        <DeleteAccountModal
+          onClose={() => setDeleteModalOpen(false)}
+          onSuccess={() => {
+            setDeleteModalOpen(false)
+            router.invalidate()
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+function ChangePasswordSection() {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setSuccess(false)
+
+    if (newPassword.length < 8) {
+      setError('A nova senha deve ter no mínimo 8 caracteres.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('A nova senha e a confirmação não coincidem.')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const { data, error: apiError } = await api.auth['change-password'].post({
+        currentPassword,
+        newPassword,
+      })
+
+      if (apiError || !data) {
+        setError(apiError?.value?.message ?? 'Não foi possível alterar a senha. Verifique sua senha atual.')
+        return
+      }
+
+      setSuccess(true)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setTimeout(() => setSuccess(false), 4000)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card className="p-6 space-y-6 animate-in fade-in duration-200">
+      <div>
+        <h2 className="font-display text-lg font-bold text-ink-900">Alterar Senha de Acesso</h2>
+        <p className="text-sm text-ink-500 mt-1">
+          Recomendamos escolher uma senha forte e exclusiva, contendo letras, números e caracteres especiais.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+        <Field label="Senha atual" htmlFor="current-password">
+          <input
+            id="current-password"
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+            className="w-full"
+            placeholder="••••••••"
+          />
+        </Field>
+
+        <Field label="Nova senha" htmlFor="new-password">
+          <input
+            id="new-password"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+            className="w-full"
+            placeholder="Mínimo de 8 caracteres"
+          />
+        </Field>
+
+        <Field label="Confirmar nova senha" htmlFor="confirm-password">
+          <input
+            id="confirm-password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            className="w-full"
+            placeholder="Repita a nova senha"
+          />
+        </Field>
+
+        {error && <ErrorNote>{error}</ErrorNote>}
+        {success && (
+          <div className="p-3 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2">
+            <Check size={16} className="text-emerald-700" /> Senha alterada com sucesso!
+          </div>
+        )}
+
+        <div className="pt-2">
+          <Button type="submit" loading={loading} className="font-bold">
+            Atualizar senha
+          </Button>
+        </div>
+      </form>
+    </Card>
+  )
+}
+
+function SessionsSection() {
+  const [sessions, setSessions] = useState<SessionItem[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [revoking, setRevoking] = useState(false)
+  const [revokingId, setRevokingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function loadSessions() {
+    setLoading(true)
+    try {
+      const { data, error: apiError } = await api.auth.sessions.get()
+      if (apiError || !data || !('sessions' in data)) {
+        setError('Não foi possível carregar as sessões ativas.')
+        return
+      }
+      setSessions(data.sessions as SessionItem[])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadSessions()
+  }, [])
+
+  async function handleRevokeAll() {
+    setRevoking(true)
+    setError(null)
+    try {
+      await api.auth.sessions['revoke-all'].post()
+      await loadSessions()
+    } finally {
+      setRevoking(false)
+    }
+  }
+
+  async function handleRevokeSingle(id: string) {
+    setRevokingId(id)
+    setError(null)
+    try {
+      const { error: apiError } = await api.auth.sessions({ id }).delete()
+      if (apiError) {
+        setError(apiError?.value?.message ?? 'Não foi possível encerrar esta sessão.')
+        return
+      }
+      await loadSessions()
+    } finally {
+      setRevokingId(null)
+    }
+  }
+
+  return (
+    <Card className="p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150 ease-out">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
+        <div>
+          <h2 className="font-display text-lg font-bold text-ink-900">Sessões e Dispositivos Ativos</h2>
+          <p className="text-sm text-ink-500 mt-1">
+            Mantenha controle total dos dispositivos conectados para proteger suas campanhas e dados de receita.
+          </p>
+        </div>
+        {sessions && sessions.length > 1 && (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleRevokeAll}
+            loading={revoking}
+            className="text-xs font-bold shrink-0 text-red-600 border-red-200 hover:bg-red-50 active:scale-97 transition-all duration-150 ease-out"
+          >
+            <LogOut size={14} className="mr-1.5 inline" /> Encerrar todas as outras sessões
+          </Button>
+        )}
+      </div>
+
+      {error && <ErrorNote>{error}</ErrorNote>}
+      {loading && !sessions && <p className="text-sm text-ink-500">Carregando sessões ativas...</p>}
+
+      {sessions && (
+        <div className="space-y-3">
+          {sessions.map((s) => {
+            const isMobile = s.userAgent?.toLowerCase().includes('mobile') || s.userAgent?.toLowerCase().includes('iphone') || s.userAgent?.toLowerCase().includes('android')
+            const browserName = s.userAgent?.includes('Chrome') ? 'Google Chrome' : s.userAgent?.includes('Firefox') ? 'Mozilla Firefox' : s.userAgent?.includes('Safari') && !s.userAgent?.includes('Chrome') ? 'Safari' : 'Navegador Web'
+            const osName = s.userAgent?.includes('Linux') ? 'Linux' : s.userAgent?.includes('Mac OS') ? 'macOS' : s.userAgent?.includes('Windows') ? 'Windows' : 'Dispositivo'
+
+            return (
+              <div
+                key={s.id}
+                className={`p-4 rounded-xl border flex items-center justify-between gap-4 transition-all duration-150 ease-out ${
+                  s.isCurrent ? 'border-via-600 bg-via-50/60 ring-1 ring-via-600 shadow-2xs' : 'border-line hover:border-line-strong bg-paper'
+                }`}
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="size-10 rounded-lg bg-surface border border-line grid place-items-center text-ink-700 shrink-0">
+                    {isMobile ? <Smartphone size={20} /> : <Laptop size={20} />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-ink-900 truncate">{browserName} · {osName}</p>
+                      {s.isCurrent && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] uppercase tracking-wider shrink-0">
+                          Sessão Atual
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-ink-500 truncate mt-0.5">
+                      IP: <code className="font-mono">{s.ip || 'Não disponível'}</code> · Conectado em {new Date(s.createdAt).toLocaleDateString('pt-BR')} às {new Date(s.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+
+                {!s.isCurrent && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => handleRevokeSingle(s.id)}
+                    loading={revokingId === s.id}
+                    className="shrink-0 text-xs font-semibold py-1.5 px-3 text-red-600 border-red-200 hover:bg-red-50 active:scale-97 transition-transform duration-150 ease-out"
+                  >
+                    Encerrar
+                  </Button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Card>
   )
 }
 
@@ -41,7 +430,7 @@ function EnableTwoFactor() {
     try {
       const { data, error: apiError } = await api.auth['2fa'].setup.post()
       if (apiError || !data || typeof data.uri !== 'string' || typeof data.secret !== 'string') {
-        setError('Não foi possível iniciar o setup. Tente novamente.')
+        setError('Não foi possível iniciar a configuração. Tente novamente.')
         return
       }
       setSetup({ uri: data.uri, secret: data.secret })
@@ -57,7 +446,7 @@ function EnableTwoFactor() {
     try {
       const { data, error: apiError } = await api.auth['2fa'].enable.post({ code })
       if (apiError || !data?.backupCodes) {
-        setError('Código inválido. Confira o app autenticador e tente de novo.')
+        setError('Código inválido. Verifique seu aplicativo autenticador e tente novamente.')
         return
       }
       setBackupCodes(data.backupCodes)
@@ -69,37 +458,37 @@ function EnableTwoFactor() {
   if (backupCodes) {
     return (
       <Card className="p-6 space-y-4">
-        <h2 className="font-display text-lg font-bold">Guarde seus códigos de backup</h2>
+        <h2 className="font-display text-lg font-bold">Guarde seus códigos de recuperação</h2>
         <p className="text-sm text-ink-500">
-          Cada código funciona uma única vez, caso você perca o acesso ao app autenticador.
-          Eles não serão mostrados de novo.
+          Cada código funciona uma única vez, caso você perca o acesso ao aplicativo autenticador.
+          Eles não serão exibidos novamente.
         </p>
-        <div className="grid grid-cols-2 gap-2 font-mono text-sm bg-paper rounded-ctrl p-4">
+        <div className="grid grid-cols-2 gap-2 font-mono text-sm bg-paper rounded-ctrl p-4 border border-line">
           {backupCodes.map((c) => (
             <span key={c}>{c}</span>
           ))}
         </div>
-        <Button onClick={() => router.invalidate()}>Concluir</Button>
+        <Button onClick={() => router.invalidate()}>Concluir configuração</Button>
       </Card>
     )
   }
 
   if (setup) {
     return (
-      <Card className="p-6 space-y-4">
-        <h2 className="font-display text-lg font-bold">Escaneie o código</h2>
+      <Card className="p-6 space-y-5">
+        <h2 className="font-display text-lg font-bold">Escaneie o código QR</h2>
         <p className="text-sm text-ink-500">
-          Abra seu app autenticador (Google Authenticator, 1Password…) e escaneie o QR code.
+          Abra seu aplicativo autenticador (Google Authenticator, 1Password, Authy) e escaneie a imagem abaixo.
         </p>
-        <div className="bg-white p-4 rounded-ctrl border border-line w-fit">
+        <div className="bg-white p-4 rounded-ctrl border border-line w-fit shadow-xs">
           <QRCode value={setup.uri} size={168} />
         </div>
         <p className="text-xs text-ink-500">
-          Ou digite a chave manualmente:{' '}
-          <code className="font-mono bg-paper px-1.5 py-0.5 rounded">{setup.secret}</code>
+          Ou digite a chave de segurança manualmente:{' '}
+          <code className="font-mono bg-paper px-2 py-1 rounded border border-line font-bold">{setup.secret}</code>
         </p>
-        <form onSubmit={confirmCode} className="space-y-4">
-          <Field label="Código de 6 dígitos" htmlFor="code">
+        <form onSubmit={confirmCode} className="space-y-4 max-w-sm pt-2">
+          <Field label="Código de 6 dígitos gerado pelo app" htmlFor="code">
             <input
               id="code"
               type="text"
@@ -107,12 +496,12 @@ function EnableTwoFactor() {
               onChange={(e) => setCode(e.target.value)}
               placeholder="000000"
               required
-              className="font-mono tracking-[0.3em] max-w-40"
+              className="font-mono tracking-[0.3em] max-w-44 text-center text-lg h-11"
               autoComplete="one-time-code"
             />
           </Field>
           {error && <ErrorNote>{error}</ErrorNote>}
-          <Button type="submit" loading={loading}>
+          <Button type="submit" loading={loading} className="font-bold">
             Ativar verificação
           </Button>
         </form>
@@ -121,20 +510,20 @@ function EnableTwoFactor() {
   }
 
   return (
-    <Card className="p-6 flex items-center justify-between gap-4">
-      <div>
-        <h2 className="font-display text-lg font-bold">Verificação em duas etapas</h2>
-        <p className="mt-1 text-sm text-ink-500">
-          Além da senha, um código do seu app autenticador ao entrar.
+    <Card className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+      <div className="space-y-1">
+        <h2 className="font-display text-lg font-bold">Verificação em Duas Etapas (2FA)</h2>
+        <p className="text-sm text-ink-500 max-w-xl">
+          Adiciona uma camada extra de proteção à sua conta. Além da senha, será solicitado um código temporário de 6 dígitos ao fazer login.
         </p>
         {error && (
-          <div className="mt-3">
+          <div className="pt-2">
             <ErrorNote>{error}</ErrorNote>
           </div>
         )}
       </div>
-      <Button onClick={startSetup} loading={loading}>
-        Ativar
+      <Button onClick={startSetup} loading={loading} className="shrink-0 font-bold">
+        Configurar 2FA
       </Button>
     </Card>
   )
@@ -153,7 +542,7 @@ function DisableTwoFactor() {
     try {
       const { error: apiError } = await api.auth['2fa'].disable.post({ code })
       if (apiError) {
-        setError('Código inválido.')
+        setError('Código inválido. Verifique o aplicativo autenticador.')
         return
       }
       router.invalidate()
@@ -163,18 +552,20 @@ function DisableTwoFactor() {
   }
 
   return (
-    <Card className="p-6 space-y-4">
-      <div className="flex items-center gap-2">
-        <h2 className="font-display text-lg font-bold">Verificação em duas etapas</h2>
-        <span className="text-xs font-medium text-ok-600 bg-ok-600/10 px-2 py-0.5 rounded-full">
-          Ativa
-        </span>
+    <Card className="p-6 space-y-5">
+      <div className="flex items-center justify-between border-b border-line pb-4">
+        <div className="flex items-center gap-2">
+          <h2 className="font-display text-lg font-bold">Verificação em Duas Etapas</h2>
+          <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+            Ativa
+          </span>
+        </div>
       </div>
       <p className="text-sm text-ink-500">
-        Para desativar, confirme com um código do app autenticador ou um código de backup.
+        Para desativar a proteção em duas etapas, confirme abaixo com um código do aplicativo autenticador ou um código de recuperação de backup.
       </p>
-      <form onSubmit={handleDisable} className="flex items-end gap-3">
-        <Field label="Código" htmlFor="disable-code">
+      <form onSubmit={handleDisable} className="flex flex-col sm:flex-row items-start sm:items-end gap-3 max-w-md">
+        <Field label="Código de confirmação" htmlFor="disable-code">
           <input
             id="disable-code"
             type="text"
@@ -182,14 +573,86 @@ function DisableTwoFactor() {
             onChange={(e) => setCode(e.target.value)}
             placeholder="000000"
             required
-            className="font-mono tracking-[0.3em] max-w-40"
+            className="font-mono tracking-[0.3em] max-w-44 text-center"
           />
         </Field>
-        <Button type="submit" variant="danger" loading={loading}>
-          Desativar
+        <Button type="submit" variant="danger" loading={loading} className="font-bold">
+          Desativar 2FA
         </Button>
       </form>
       {error && <ErrorNote>{error}</ErrorNote>}
     </Card>
+  )
+}
+
+function DeleteAccountModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleConfirm(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      const { data, error: apiError } = await api.auth['delete-account'].post({ password: password || undefined })
+      if (apiError || !data) {
+        setError(apiError?.value?.message ?? 'A senha informada está incorreta.')
+        return
+      }
+      onSuccess()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <Card className="w-full max-w-md p-6 space-y-5 bg-white shadow-xl border border-line animate-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between border-b border-line pb-3">
+          <div className="flex items-center gap-2 text-red-600 font-display font-bold text-lg">
+            <ShieldAlert size={22} />
+            <span>Confirmar Encerramento de Conta</span>
+          </div>
+          <button type="button" onClick={onClose} className="text-ink-400 hover:text-ink-700 p-1 rounded-lg">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-3 text-sm text-ink-600 leading-relaxed">
+          <p>
+            Sua conta entrará em <strong>período de carência de 15 dias</strong> e ficará indisponível para novos acessos.
+          </p>
+          <p>
+            Se você mudar de ideia durante esses 15 dias, basta fazer login na plataforma e clicar em <strong>"Cancelar exclusão"</strong> para reativar todos os seus dados e configurações imediatamente.
+          </p>
+        </div>
+
+        <form onSubmit={handleConfirm} className="space-y-4 pt-2 border-t border-line">
+          <Field label="Digite sua senha atual para confirmar" htmlFor="confirm-delete-password">
+            <input
+              id="confirm-delete-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full"
+              placeholder="Sua senha de acesso"
+            />
+          </Field>
+
+          {error && <ErrorNote>{error}</ErrorNote>}
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+              Voltar
+            </Button>
+            <Button type="submit" variant="danger" loading={loading} className="font-bold">
+              Agendar exclusão (15 dias)
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
   )
 }

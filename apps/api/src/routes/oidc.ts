@@ -147,7 +147,13 @@ export const oidcRoutes = new Elysia()
       }
 
       const { token, expiresIn } = await signUserToken({
-        user: { id: user.id, email: user.email, name: user.name },
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+          avatarFrame: user.avatarFrame,
+        },
         sessionId: authCode.sessionId,
         clientSlug: client.slug,
         nonce: authCode.nonce,

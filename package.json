@@ -7,18 +7,19 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter '*' dev",
+    "dev": "turbo run dev",
     "dev:api": "bun run --cwd apps/api dev",
     "dev:web": "bun run --cwd apps/web dev",
-    "build": "bun run --cwd apps/api build && bun run --cwd apps/web build",
-    "typecheck": "bun run --filter '*' typecheck",
-    "db:generate": "bun run --cwd packages/db db:generate",
-    "db:migrate": "bun run --cwd packages/db db:migrate",
-    "db:seed": "bun run --cwd packages/db db:seed"
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "turbo run db:generate",
+    "db:migrate": "turbo run db:migrate",
+    "db:seed": "turbo run db:seed"
   },
   "devDependencies": {
     "jose": "^6.2.3",
     "puppeteer-core": "^25.3.0",
+    "turbo": "latest",
     "typescript": "^5"
   }
 }

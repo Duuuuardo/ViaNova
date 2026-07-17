@@ -3,40 +3,7 @@
 @import '@fontsource-variable/public-sans';
 @import '@fontsource/ibm-plex-mono/400.css';
 @import '@fontsource/ibm-plex-mono/500.css';
-
-@theme {
-  /* Tinta — texto e superfícies escuras */
-  --color-ink-900: #16151f;
-  --color-ink-700: #3a3947;
-  --color-ink-500: #6b6f7e;
-  --color-ink-400: #9498a6;
-
-  /* Azul-sinal — o único acento. Rotas, ações, foco. */
-  --color-via-50: #f3f4ff;
-  --color-via-100: #e8eafe;
-  --color-via-500: #4d5ef2;
-  --color-via-600: #3d4fef;
-  --color-via-700: #2f3fd1;
-
-  /* Superfícies frias */
-  --color-paper: #f6f7f9;
-  --color-surface: #ffffff;
-  --color-line: #e4e6ec;
-  --color-line-strong: #c9ccd6;
-
-  /* Semânticas */
-  --color-ok-600: #1a9a5b;
-  --color-warn-600: #c77e14;
-  --color-danger-600: #d64545;
-  --color-danger-50: #fdf3f3;
-
-  --font-display: 'Overpass Variable', system-ui, sans-serif;
-  --font-sans: 'Public Sans Variable', system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-
-  --radius-ctrl: 8px;
-  --radius-card: 12px;
-}
+@import '@vianova/config/tailwind/base.css';
 
 @layer base {
   body {
@@ -65,6 +32,21 @@
 
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-via-600;
+  }
+
+  @keyframes dropdown-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .animate-in {
+    animation: dropdown-in 160ms ease-out;
   }
 
   @media (prefers-reduced-motion: reduce) {

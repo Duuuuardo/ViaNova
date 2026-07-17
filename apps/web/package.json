@@ -16,6 +16,8 @@
     "@tanstack/react-router": "^1",
     "@tanstack/react-start": "^1",
     "@vianova/client": "workspace:*",
+    "@vianova/config": "workspace:*",
+    "lucide-react": "^1.24.0",
     "react": "^19",
     "react-dom": "^19",
     "react-qr-code": "^2"
