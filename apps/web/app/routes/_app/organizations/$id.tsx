@@ -107,7 +107,7 @@ function OrganizationDetailPage() {
         <SectionTitle>Membros</SectionTitle>
         <Card className="divide-y divide-line">
           {detail.members.map((member) => (
-            <div key={member.id} className="flex items-center justify-between p-4">
+            <div key={member.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
               <div className="flex items-center gap-3">
                 <span className="flex size-9 items-center justify-center rounded-full bg-via-50 font-display font-bold text-via-700 uppercase">
                   {member.name[0]}
@@ -127,7 +127,7 @@ function OrganizationDetailPage() {
               {isOwner && member.userId !== detail.organization.ownerUserId && (
                 <button
                   onClick={() => handleRemoveMember(member.userId)}
-                  className="text-xs font-medium text-danger-600 hover:underline"
+                  className="text-xs font-medium text-danger-600 hover:underline self-start sm:self-auto"
                 >
                   Remover
                 </button>
@@ -138,7 +138,7 @@ function OrganizationDetailPage() {
 
         {isOwner && (
           <Card className="p-4">
-            <form onSubmit={handleAddMember} className="flex items-end gap-3">
+            <form onSubmit={handleAddMember} className="flex flex-col sm:flex-row sm:items-end gap-3">
               <div className="flex-1">
                 <Field
                   label="Adicionar membro"
@@ -155,7 +155,7 @@ function OrganizationDetailPage() {
                   />
                 </Field>
               </div>
-              <Button type="submit" variant="secondary" loading={loading} className="mb-6">
+              <Button type="submit" variant="secondary" loading={loading} className="mb-0 sm:mb-6 w-full sm:w-auto">
                 Adicionar
               </Button>
             </form>
@@ -167,11 +167,11 @@ function OrganizationDetailPage() {
       {isOwner && (
         <section className="space-y-3">
           <SectionTitle>Zona de risco</SectionTitle>
-          <Card className="p-4 flex items-center justify-between">
+          <Card className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <p className="text-sm text-ink-500">
               Excluir a organização não afeta os workspaces dos produtos, apenas o agrupamento.
             </p>
-            <Button variant="danger" onClick={handleDelete}>
+            <Button variant="danger" onClick={handleDelete} className="w-full sm:w-auto">
               Excluir organização
             </Button>
           </Card>

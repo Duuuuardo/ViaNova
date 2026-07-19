@@ -45,12 +45,12 @@ async function postToProduct(apiUrl: string, path: string, scope: string, produc
   }
 }
 
-// Consolida plano + add-ons da assinatura e sincroniza no produto via
-// POST {product.api_url}/internal/entitlements.
-export async function syncEntitlements(productSlug: string, workspaceId: string) {
-  const product = await getProduct(productSlug)
-  if (!product) throw new Error(`Produto ${productSlug} não existe no catálogo`)
-
+// Consolida plano + add-ons da assinatura de um workspace.
+// Exportado para reutilização em quota de arquivos.
+export async function resolveWorkspaceLimits(
+  productSlug: string,
+  workspaceId: string,
+): Promise<{ tier: string; status: string; limits: Record<string, number> } | null> {
   const [sub] = await db
     .select({ sub: productSubscriptions, plan: productPlans })
     .from(productSubscriptions)
@@ -82,16 +82,55 @@ export async function syncEntitlements(productSlug: string, workspaceId: string)
   }
 
   if (tier === 'free' && productSlug === 'naia') {
-    limits.messagesPerMonth = 3
+    limits.creditsPerCycle = 3
     limits.campaignsPerMonth = 1
   }
+
+  return {
+    tier,
+    status: sub?.sub.status ?? 'none',
+    limits,
+  }
+}
+
+// Consolida plano + add-ons da assinatura e sincroniza no produto via
+// POST {product.api_url}/internal/entitlements.
+export async function syncEntitlements(productSlug: string, workspaceId: string) {
+  const product = await getProduct(productSlug)
+  if (!product) throw new Error(`Produto ${productSlug} não existe no catálogo`)
+
+  const resolved = await resolveWorkspaceLimits(productSlug, workspaceId)
+  if (!resolved) return
 
   await postToProduct(product.apiUrl, '/internal/entitlements', 'service:entitlements:write', productSlug, {
     workspace_id: workspaceId,
     product_slug: productSlug,
-    tier,
-    status: sub?.sub.status ?? 'none',
-    limits,
+    tier: resolved.tier,
+    status: resolved.status,
+    limits: resolved.limits,
+  })
+}
+
+// Concede créditos de disparo ao workspace do produto após pagamento.
+// Chamado em invoice.paid para subscription_create e subscription_cycle.
+export async function grantCredits(productSlug: string, workspaceId: string, amount: number) {
+  const product = await getProduct(productSlug)
+  if (!product) return
+  await postToProduct(product.apiUrl, '/internal/credits/grant', 'service:entitlements:write', productSlug, {
+    workspace_id: workspaceId,
+    product_slug: productSlug,
+    amount,
+  })
+}
+
+// Zera o saldo de créditos do workspace em estorno, chargeback ou cancelamento
+// de subscription paga. Quem concede pode resetar.
+export async function resetCredits(productSlug: string, workspaceId: string) {
+  const product = await getProduct(productSlug)
+  if (!product) return
+  await postToProduct(product.apiUrl, '/internal/credits/reset', 'service:entitlements:write', productSlug, {
+    workspace_id: workspaceId,
+    product_slug: productSlug,
   })
 }
 

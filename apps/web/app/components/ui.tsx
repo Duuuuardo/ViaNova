@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { type ButtonHTMLAttributes, type ReactNode, useState, useEffect } from 'react'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
@@ -6,7 +6,7 @@ const buttonStyles: Record<ButtonVariant, string> = {
   primary: 'bg-via-600 text-white hover:bg-via-700',
   secondary: 'border border-line-strong bg-surface text-ink-900 hover:bg-paper',
   ghost: 'text-ink-700 hover:bg-paper',
-  danger: 'bg-danger-600 text-white hover:opacity-90',
+  danger: 'bg-[#d64545] text-white hover:bg-[#b83838]',
 }
 
 export function Button({
@@ -91,3 +91,149 @@ export function StatusDot({ tone }: { tone: 'ok' | 'warn' | 'danger' | 'muted' }
   }
   return <span className={`inline-block size-2 rounded-full ${colors[tone]}`} aria-hidden="true" />
 }
+
+// ─── Switch & Toggle (Vianova Design System — #C466FF / #A63FE8) ─────────────
+
+export type SwitchSize = 'sm' | 'md'
+
+export function Switch({
+  checked,
+  onChange,
+  disabled = false,
+  size = 'md',
+  className = '',
+  ...props
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onChange'> & {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  disabled?: boolean
+  size?: SwitchSize
+}) {
+  const [internalChecked, setInternalChecked] = useState(checked)
+
+  useEffect(() => {
+    setInternalChecked(checked)
+  }, [checked])
+
+  const handleToggle = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation()
+    if (disabled) return
+    const next = !internalChecked
+    setInternalChecked(next)
+    onChange(next)
+  }
+
+  const isSm = size === 'sm'
+  const trackSize = isSm ? 'h-5 w-9' : 'h-6 w-11'
+  const thumbBase = isSm ? 'h-4' : 'h-5'
+  const thumbWidth = isSm
+    ? 'w-4 group-active:w-6'
+    : 'w-5 group-active:w-7'
+  const thumbTranslate = isSm
+    ? internalChecked
+      ? 'translate-x-[18px] group-active:translate-x-[10px]'
+      : 'translate-x-[2px] group-active:translate-x-[2px]'
+    : internalChecked
+      ? 'translate-x-[22px] group-active:translate-x-[14px]'
+      : 'translate-x-[2px] group-active:translate-x-[2px]'
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={internalChecked}
+      disabled={disabled}
+      {...props}
+      onClick={(e) => {
+        handleToggle(e)
+        props.onClick?.(e)
+      }}
+      onKeyDown={(e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault()
+          handleToggle(e)
+        }
+        props.onKeyDown?.(e)
+      }}
+      className={`group relative inline-flex shrink-0 cursor-pointer items-center rounded-full transition-colors duration-250 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-via-500 focus-visible:ring-offset-2 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none ${trackSize} ${
+        internalChecked
+          ? 'bg-via-600 shadow-inner-sm'
+          : 'bg-line-strong hover:bg-ink-400/80 border border-ink-200/60'
+      } ${className}`}
+    >
+      <span
+        className={`pointer-events-none inline-block rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.18),0_1px_2px_rgba(0,0,0,0.1)] ring-1 ring-black/[0.06] transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${thumbBase} ${thumbWidth} ${thumbTranslate}`}
+        aria-hidden="true"
+      />
+    </button>
+  )
+}
+
+export function ToggleRow({
+  id,
+  label,
+  hint,
+  checked,
+  onChange,
+  disabled = false,
+  size = 'md',
+}: {
+  id: string
+  label: ReactNode
+  hint?: ReactNode
+  checked: boolean
+  onChange: (on: boolean) => void
+  disabled?: boolean
+  size?: SwitchSize
+}) {
+  const [internalChecked, setInternalChecked] = useState(checked)
+
+  useEffect(() => {
+    setInternalChecked(checked)
+  }, [checked])
+
+  const handleRowClick = () => {
+    if (disabled) return
+    const next = !internalChecked
+    setInternalChecked(next)
+    onChange(next)
+  }
+
+  return (
+    <div
+      onClick={handleRowClick}
+      className={`group/row flex items-center justify-between gap-4 select-none ${
+        disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+      }`}
+    >
+      <span className="min-w-0 flex-1">
+        <label
+          htmlFor={id}
+          onClick={(e) => e.preventDefault()}
+          className={`mb-0 flex items-center gap-1.5 text-sm font-semibold text-ink-900 transition-colors duration-150 ${
+            disabled ? 'cursor-not-allowed' : 'cursor-pointer group-hover/row:text-via-950 dark:group-hover/row:text-white'
+          }`}
+        >
+          {label}
+        </label>
+        {hint && (
+          <span className="mt-0.5 block text-xs leading-relaxed text-ink-500">
+            {hint}
+          </span>
+        )}
+      </span>
+      <Switch
+        id={id}
+        checked={internalChecked}
+        onChange={(val) => {
+          setInternalChecked(val)
+          onChange(val)
+        }}
+        disabled={disabled}
+        size={size}
+        aria-label={typeof label === 'string' ? label : undefined}
+      />
+    </div>
+  )
+}
+

@@ -20,6 +20,8 @@ import { Route as AuthForgotPasswordRouteImport } from './routes/_auth/forgot-pa
 import { Route as Auth2faRouteImport } from './routes/_auth/2fa'
 import { Route as AppSecurityRouteImport } from './routes/_app/security'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
+import { Route as AppNotificationsRouteImport } from './routes/_app/notifications'
+import { Route as AppFilesRouteImport } from './routes/_app/files'
 import { Route as AppBillingRouteImport } from './routes/_app/billing'
 import { Route as AppOrganizationsIndexRouteImport } from './routes/_app/organizations/index'
 import { Route as AppOrganizationsIdRouteImport } from './routes/_app/organizations/$id'
@@ -77,6 +79,16 @@ const AppProfileRoute = AppProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotificationsRoute = AppNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFilesRoute = AppFilesRouteImport.update({
+  id: '/files',
+  path: '/files',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppBillingRoute = AppBillingRouteImport.update({
   id: '/billing',
   path: '/billing',
@@ -96,6 +108,8 @@ const AppOrganizationsIdRoute = AppOrganizationsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/billing': typeof AppBillingRoute
+  '/files': typeof AppFilesRoute
+  '/notifications': typeof AppNotificationsRoute
   '/profile': typeof AppProfileRoute
   '/security': typeof AppSecurityRoute
   '/2fa': typeof Auth2faRoute
@@ -110,6 +124,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/billing': typeof AppBillingRoute
+  '/files': typeof AppFilesRoute
+  '/notifications': typeof AppNotificationsRoute
   '/profile': typeof AppProfileRoute
   '/security': typeof AppSecurityRoute
   '/2fa': typeof Auth2faRoute
@@ -126,6 +142,8 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/_auth': typeof AuthRouteWithChildren
   '/_app/billing': typeof AppBillingRoute
+  '/_app/files': typeof AppFilesRoute
+  '/_app/notifications': typeof AppNotificationsRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/security': typeof AppSecurityRoute
   '/_auth/2fa': typeof Auth2faRoute
@@ -143,6 +161,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/billing'
+    | '/files'
+    | '/notifications'
     | '/profile'
     | '/security'
     | '/2fa'
@@ -157,6 +177,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/billing'
+    | '/files'
+    | '/notifications'
     | '/profile'
     | '/security'
     | '/2fa'
@@ -172,6 +194,8 @@ export interface FileRouteTypes {
     | '/_app'
     | '/_auth'
     | '/_app/billing'
+    | '/_app/files'
+    | '/_app/notifications'
     | '/_app/profile'
     | '/_app/security'
     | '/_auth/2fa'
@@ -269,6 +293,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/notifications': {
+      id: '/_app/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AppNotificationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/files': {
+      id: '/_app/files'
+      path: '/files'
+      fullPath: '/files'
+      preLoaderRoute: typeof AppFilesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/billing': {
       id: '/_app/billing'
       path: '/billing'
@@ -295,6 +333,8 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppBillingRoute: typeof AppBillingRoute
+  AppFilesRoute: typeof AppFilesRoute
+  AppNotificationsRoute: typeof AppNotificationsRoute
   AppProfileRoute: typeof AppProfileRoute
   AppSecurityRoute: typeof AppSecurityRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -304,6 +344,8 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppBillingRoute: AppBillingRoute,
+  AppFilesRoute: AppFilesRoute,
+  AppNotificationsRoute: AppNotificationsRoute,
   AppProfileRoute: AppProfileRoute,
   AppSecurityRoute: AppSecurityRoute,
   AppIndexRoute: AppIndexRoute,

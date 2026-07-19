@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet, redirect, useRouter } from '@tanstack/re
 import { useEffect, useRef, useState } from 'react'
 import {
   CreditCard,
+  Files,
   House,
   LayoutGrid,
   LogOut,
@@ -15,6 +16,8 @@ import { getSession } from '../lib/auth'
 import { api } from '../lib/api'
 import { ViaLogo } from '../components/brand'
 import { Avatar } from '../components/avatar'
+import { MobileNav } from '../components/mobile-nav'
+import { NotificationBell } from '../components/notifications'
 
 export const Route = createFileRoute('/_app')({
   beforeLoad: async () => {
@@ -27,11 +30,12 @@ export const Route = createFileRoute('/_app')({
   component: AppLayout,
 })
 
-const navItems = [
+export const navItems = [
   { to: '/', label: 'Início', icon: House, exact: true },
   { to: '/profile', label: 'Perfil', icon: UserRound },
   { to: '/security', label: 'Segurança', icon: ShieldCheck },
   { to: '/billing', label: 'Assinaturas', icon: CreditCard },
+  { to: '/files', label: 'Arquivos', icon: Files },
 ] as const
 
 function AppLayout() {
@@ -85,7 +89,7 @@ function VerifyEmailBanner({ email }: { email: string }) {
       <div className="max-w-6xl mx-auto px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <MailWarning size={16} aria-hidden="true" className="shrink-0 text-amber-600" />
         <p className="text-sm text-amber-900 flex-1 min-w-48">
-          Confirme seu email para proteger sua conta — enviamos um link para{' '}
+          Confirme seu email para proteger sua conta. Enviamos um link para{' '}
           <strong className="font-semibold">{email}</strong>.
         </p>
         {sent ? (
@@ -120,11 +124,13 @@ function Topbar({
     <header className="h-14 border-b border-line bg-surface">
       <div className="max-w-6xl mx-auto h-full px-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
+          <MobileNav items={navItems} />
           <Link to="/" aria-label="Início do Vianova">
-            <ViaLogo />
+            <ViaLogo size={26} />
           </Link>
         </div>
         <div className="flex items-center gap-3">
+          <NotificationBell />
           <ProductSwitcher />
           <Link
             to="/profile"

@@ -66,7 +66,7 @@ export const catalogRoutes = new Elysia({ prefix: '/products' })
       if (params.slug === 'naia' && p.tier === 'free') {
         return {
           ...p,
-          limits: { ...p.limits, messagesPerMonth: 3, campaignsPerMonth: 1 },
+          limits: { ...p.limits, creditsPerCycle: 3, campaignsPerMonth: 1 },
         }
       }
       return p

@@ -1,0 +1,106 @@
+$ vite build
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+vite v8.1.4 building client environment for production...
+[2Ktransforming...✓ 1939 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/assets/ibm-plex-mono-vietnamese-500-normal-C8zxqsMH.woff       5.61 kB
+dist/client/assets/ibm-plex-mono-vietnamese-400-normal-DDuiU_S-.woff       5.62 kB
+dist/client/assets/ibm-plex-mono-cyrillic-ext-500-normal-BIfNGwUT.woff     5.77 kB
+dist/client/assets/ibm-plex-mono-cyrillic-ext-400-normal-DMdlQ8Kv.woff     5.82 kB
+dist/client/assets/ibm-plex-mono-vietnamese-400-normal-BulugwFq.woff2      5.86 kB
+dist/client/assets/ibm-plex-mono-vietnamese-500-normal-DZ4AoWbu.woff2      6.04 kB
+dist/client/assets/ibm-plex-mono-cyrillic-ext-400-normal-xuaO2J-f.woff2    6.91 kB
+dist/client/assets/ibm-plex-mono-cyrillic-ext-500-normal-BqneJy0T.woff2    6.97 kB
+dist/client/assets/ibm-plex-mono-cyrillic-400-normal-CEL4l2ZJ.woff         7.20 kB
+dist/client/assets/ibm-plex-mono-cyrillic-500-normal-Ael50iVv.woff         7.20 kB
+dist/client/assets/public-sans-vietnamese-wght-normal-CtlIRbEm.woff2       7.71 kB
+dist/client/assets/ibm-plex-mono-cyrillic-400-normal-BSMlKf0J.woff2        8.35 kB
+dist/client/assets/ibm-plex-mono-cyrillic-500-normal-Bq9vWWag.woff2        8.46 kB
+dist/client/assets/overpass-vietnamese-wght-normal-BfgOsjc9.woff2          8.48 kB
+dist/client/assets/ibm-plex-mono-latin-ext-400-normal-D3D2R8hC.woff       11.76 kB
+dist/client/assets/ibm-plex-mono-latin-ext-500-normal-CZ70TYgx.woff       11.76 kB
+dist/client/assets/ibm-plex-mono-latin-400-normal-CvHOgSBP.woff           13.14 kB
+dist/client/assets/ibm-plex-mono-latin-500-normal-CB9ihrfo.woff           13.15 kB
+dist/client/assets/ibm-plex-mono-latin-ext-400-normal-BmRBH3aV.woff2      13.34 kB
+dist/client/assets/ibm-plex-mono-latin-ext-500-normal-CAhNIIs5.woff2      13.43 kB
+dist/client/assets/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2          14.70 kB
+dist/client/assets/ibm-plex-mono-latin-500-normal-DSY6xOcd.woff2          14.88 kB
+dist/client/assets/overpass-cyrillic-ext-wght-normal-B1PfurAb.woff2       16.70 kB
+dist/client/assets/public-sans-latin-ext-wght-normal-MQgHevqp.woff2       18.47 kB
+dist/client/assets/public-sans-latin-wght-normal-DdeTHZLK.woff2           26.83 kB
+dist/client/assets/overpass-cyrillic-wght-normal-Bb0oHPsy.woff2           27.44 kB
+dist/client/assets/overpass-latin-wght-normal-qAR8M_co.woff2              39.38 kB
+dist/client/assets/overpass-latin-ext-wght-normal-DvafStyF.woff2          46.08 kB
+dist/client/assets/index-Co5tSxEa.css                                     45.21 kB │ gzip:  8.63 kB
+dist/client/assets/external-link-ILgfXe_q.js                               0.25 kB │ gzip:  0.19 kB
+dist/client/assets/redirect-Do2_TY0F.js                                    0.30 kB │ gzip:  0.22 kB
+dist/client/assets/shield-check-BFAtKdoS.js                                0.49 kB │ gzip:  0.32 kB
+dist/client/assets/laptop-C45GcWmz.js                                      0.56 kB │ gzip:  0.34 kB
+dist/client/assets/_auth-BjkIIPN-.js                                       0.67 kB │ gzip:  0.39 kB
+dist/client/assets/matchContext-Fv3f7CUR.js                                0.77 kB │ gzip:  0.44 kB
+dist/client/assets/avatar-DJJkIhEl.js                                      0.82 kB │ gzip:  0.52 kB
+dist/client/assets/createLucideIcon-Cgab8gqu.js                            1.38 kB │ gzip:  0.78 kB
+dist/client/assets/verify-email-BS9pfG60.js                                1.38 kB │ gzip:  0.63 kB
+dist/client/assets/brand-BDeUyj4a.js                                       1.45 kB │ gzip:  0.63 kB
+dist/client/assets/reset-password-wDbkBbzn.js                              1.73 kB │ gzip:  0.92 kB
+dist/client/assets/2fa-gOrJIBH7.js                                         1.74 kB │ gzip:  0.92 kB
+dist/client/assets/forgot-password-BylA8mwV.js                             1.78 kB │ gzip:  0.79 kB
+dist/client/assets/register-GH2jwYkt.js                                    2.21 kB │ gzip:  1.02 kB
+dist/client/assets/login-Cznr8pzI.js                                       2.70 kB │ gzip:  1.22 kB
+dist/client/assets/organizations-BhoeijT3.js                               2.96 kB │ gzip:  1.23 kB
+dist/client/assets/_id-BJEOFC_u.js                                         3.87 kB │ gzip:  1.53 kB
+dist/client/assets/ui-Bqwj-hM-.js                                          3.90 kB │ gzip:  1.56 kB
+dist/client/assets/_app-4O0oXBn2.js                                        4.18 kB │ gzip:  1.56 kB
+dist/client/assets/route-Cg31SI8g.js                                       4.77 kB │ gzip:  1.42 kB
+dist/client/assets/_app-CqoOS9pE.js                                        7.18 kB │ gzip:  2.84 kB
+dist/client/assets/link-BT7nP0Tn.js                                        7.82 kB │ gzip:  3.32 kB
+dist/client/assets/api-CZNz-F1o.js                                         8.11 kB │ gzip:  3.30 kB
+dist/client/assets/jsx-runtime-bzQ4Vb5N.js                                 8.40 kB │ gzip:  3.20 kB
+dist/client/assets/billing-DO9EnxxH.js                                    10.59 kB │ gzip:  3.50 kB
+dist/client/assets/useStore-Dx1Gcn6-.js                                   19.18 kB │ gzip:  6.91 kB
+dist/client/assets/profile-CS8h6vXf.js                                    27.01 kB │ gzip:  7.88 kB
+dist/client/assets/security-CkSWFzu2.js                                   42.98 kB │ gzip: 13.81 kB
+dist/client/assets/index-BxCMbK8j.js                                     286.13 kB │ gzip: 90.67 kB
+
+✓ built in 2.08s
+vite v8.1.4 building ssr environment for production...
+[2Ktransforming...✓ 151 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/server/assets/start-CPgSJ7Ui.js                         0.21 kB │ gzip:  0.17 kB
+dist/server/assets/empty-plugin-adapters-BuQpD_9R.js         0.28 kB │ gzip:  0.18 kB
+dist/server/assets/_id-DYDNVDL4.js                           0.35 kB │ gzip:  0.22 kB
+dist/server/assets/2fa-CthSa8_C.js                           0.45 kB │ gzip:  0.28 kB
+dist/server/assets/login-DLyGbNVL.js                         0.46 kB │ gzip:  0.28 kB
+dist/server/assets/verify-email-DxIHAqkY.js                  0.46 kB │ gzip:  0.28 kB
+dist/server/assets/reset-password-C1wLxWC9.js                0.46 kB │ gzip:  0.28 kB
+dist/server/assets/register-l1e6jLU7.js                      0.46 kB │ gzip:  0.28 kB
+dist/server/assets/redirect-CnTN6tXe.js                      0.60 kB │ gzip:  0.32 kB
+dist/server/assets/_auth-AVVsUP2j.js                         0.97 kB │ gzip:  0.49 kB
+dist/server/assets/avatar-DjKSNbHy.js                        1.11 kB │ gzip:  0.63 kB
+dist/server/assets/auth-DUnxjfzO.js                          1.21 kB │ gzip:  0.63 kB
+dist/server/assets/_app-C6xzxYWb.js                          1.24 kB │ gzip:  0.67 kB
+dist/server/assets/verify-email-C303OPcB.js                  1.93 kB │ gzip:  0.75 kB
+dist/server/assets/brand-DRDVYSvY.js                         2.03 kB │ gzip:  0.78 kB
+dist/server/assets/forgot-password-Crj-nh3o.js               2.61 kB │ gzip:  0.98 kB
+dist/server/assets/reset-password-Bcte5koo.js                2.63 kB │ gzip:  1.12 kB
+dist/server/assets/2fa-DaUWM6AZ.js                           2.73 kB │ gzip:  1.16 kB
+dist/server/assets/register-DCyFg2Pt.js                      3.49 kB │ gzip:  1.25 kB
+dist/server/assets/login-XPWJDJ7p.js                         4.27 kB │ gzip:  1.55 kB
+dist/server/assets/_tanstack-start-manifest_v-DMedMsK3.js    4.28 kB │ gzip:  0.98 kB
+dist/server/assets/organizations-DkfRjWXU.js                 4.69 kB │ gzip:  1.56 kB
+dist/server/assets/ui-DB4-4WUi.js                            5.07 kB │ gzip:  1.80 kB
+dist/server/assets/router-CsdTIb6y.js                        5.46 kB │ gzip:  1.40 kB
+dist/server/assets/_app-DWaALxOg.js                          5.87 kB │ gzip:  1.69 kB
+dist/server/assets/_id-GiuRIyEG.js                           5.98 kB │ gzip:  1.91 kB
+dist/server/assets/_app-Cr6Qd-1U.js                          8.13 kB │ gzip:  2.68 kB
+dist/server/assets/api-DunZhZic.js                          11.57 kB │ gzip:  4.11 kB
+dist/server/assets/billing-CtjuDDRN.js                      14.86 kB │ gzip:  3.90 kB
+dist/server/assets/security-B4FeIngu.js                     26.85 kB │ gzip:  5.94 kB
+dist/server/assets/profile-BJxF9Q1s.js                      39.05 kB │ gzip:  8.62 kB
+dist/server/server.js                                      182.44 kB │ gzip: 45.64 kB
+
+✓ built in 1.24s

@@ -47,7 +47,7 @@ async function seed() {
       description: 'Para experimentar o Naia.',
       priceCents: 0,
       stripePriceId: process.env.NAIA_STRIPE_PRICE_FREE ?? null,
-      limits: { seats: 1, connections: 1, messagesPerMonth: 3, campaignsPerMonth: 1 },
+      limits: { seats: 1, connections: 1, creditsPerCycle: 3, campaignsPerMonth: 1, automations: 0, storageBytes: 104_857_600, maxFileSizeBytes: 5_242_880 },
       sortOrder: 0,
     },
     {
@@ -58,7 +58,7 @@ async function seed() {
       description: 'Para operações pequenas.',
       priceCents: 9700,
       stripePriceId: process.env.NAIA_STRIPE_PRICE_STARTER ?? null,
-      limits: { seats: 3, connections: 2, messagesPerMonth: 5000, campaignsPerMonth: 20 },
+      limits: { seats: 1, connections: 2, creditsPerCycle: 3000, campaignsPerMonth: 10, automations: 0, storageBytes: 536_870_912, maxFileSizeBytes: 31_457_280 },
       sortOrder: 1,
     },
     {
@@ -69,8 +69,19 @@ async function seed() {
       description: 'Para times que disparam em escala.',
       priceCents: 24700,
       stripePriceId: process.env.NAIA_STRIPE_PRICE_PRO ?? null,
-      limits: { seats: 10, connections: 5, messagesPerMonth: 50000, campaignsPerMonth: 100 },
+      limits: { seats: 10, connections: 5, creditsPerCycle: 50000, campaignsPerMonth: 100, automations: 2, storageBytes: 2_147_483_648, maxFileSizeBytes: 104_857_600 },
       sortOrder: 2,
+    },
+    {
+      id: 'naia-scale',
+      productSlug: 'naia',
+      tier: 'scale',
+      name: 'Scale',
+      description: 'Para operações de alto volume com fila dedicada.',
+      priceCents: 99700,
+      stripePriceId: process.env.NAIA_STRIPE_PRICE_SCALE ?? null,
+      limits: { seats: 50, connections: 20, creditsPerCycle: 500000, campaignsPerMonth: 1000, automations: -1, storageBytes: 10_737_418_240, maxFileSizeBytes: 524_288_000 },
+      sortOrder: 3,
     },
   ]
 
@@ -86,7 +97,17 @@ async function seed() {
       })
   }
 
-  const addons = [
+  const addons: Array<{
+    id: string
+    productSlug: string
+    key: string
+    name: string
+    description: string
+    unitLabel: string
+    priceCents: number
+    stripePriceId: string | null
+    limitsPerUnit: Record<string, number>
+  }> = [
     {
       id: 'naia-extra-campaigns',
       productSlug: 'naia',
@@ -99,6 +120,17 @@ async function seed() {
       limitsPerUnit: { campaignsPerMonth: 10 },
     },
     {
+      id: 'naia-extra-credits',
+      productSlug: 'naia',
+      key: 'extra_credits',
+      name: 'Créditos extras',
+      description: 'Pacote de 1.000 créditos de disparo adicionais.',
+      unitLabel: 'pacote de 1.000 créditos',
+      priceCents: 1900,
+      stripePriceId: process.env.NAIA_STRIPE_PRICE_EXTRA_CREDITS ?? null,
+      limitsPerUnit: { creditsPerCycle: 1000 },
+    },
+    {
       id: 'naia-extra-seats',
       productSlug: 'naia',
       key: 'extra_seats',
@@ -108,6 +140,39 @@ async function seed() {
       priceCents: 1900,
       stripePriceId: process.env.NAIA_STRIPE_PRICE_EXTRA_SEATS ?? null,
       limitsPerUnit: { seats: 1 },
+    },
+    {
+      id: 'naia-extra-connections',
+      productSlug: 'naia',
+      key: 'extra_connections',
+      name: 'Conexões extras',
+      description: 'Um canal adicional para conectar mais números de WhatsApp ou bots do Telegram.',
+      unitLabel: 'conexão',
+      priceCents: 3900,
+      stripePriceId: process.env.NAIA_STRIPE_PRICE_EXTRA_CONNECTIONS ?? null,
+      limitsPerUnit: { connections: 1 },
+    },
+    {
+      id: 'naia-extra-automations',
+      productSlug: 'naia',
+      key: 'extra_automations',
+      name: 'Automações extras',
+      description: 'Uma automação ativa adicional para o seu workspace.',
+      unitLabel: 'automação',
+      priceCents: 1990,
+      stripePriceId: process.env.NAIA_STRIPE_PRICE_EXTRA_AUTOMATIONS ?? null,
+      limitsPerUnit: { automations: 1 },
+    },
+    {
+      id: 'naia-extra-storage',
+      productSlug: 'naia',
+      key: 'extra_storage',
+      name: 'Storage extra',
+      description: 'Pacote de 1 GB de armazenamento adicional para mídias e arquivos do workspace.',
+      unitLabel: 'GB',
+      priceCents: 500,
+      stripePriceId: process.env.NAIA_STRIPE_PRICE_EXTRA_STORAGE ?? null,
+      limitsPerUnit: { storageBytes: 1_073_741_824 },
     },
   ]
 

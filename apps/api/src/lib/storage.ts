@@ -1,13 +1,24 @@
 import { S3Client } from 'bun'
 
-// Servidor de arquivos próprio do Vianova (MinIO, S3-compatible). Exclusivo
-// deste repo: nenhum produto fala com o storage — só recebem a URL pública
-// proxied por /files/avatars/:name (claim `picture` do token).
-const s3 = new S3Client({
-  endpoint: process.env.VIANOVA_S3_ENDPOINT ?? 'http://localhost:9100',
-  accessKeyId: process.env.VIANOVA_S3_ACCESS_KEY ?? 'vianova',
-  secretAccessKey: process.env.VIANOVA_S3_SECRET_KEY ?? 'vianova_secret',
-  bucket: process.env.VIANOVA_S3_BUCKET ?? 'vianova-avatars',
+const S3_ENDPOINT = process.env.VIANOVA_S3_ENDPOINT ?? 'http://localhost:9100'
+const S3_ACCESS_KEY = process.env.VIANOVA_S3_ACCESS_KEY ?? 'vianova'
+const S3_SECRET_KEY = process.env.VIANOVA_S3_SECRET_KEY ?? 'vianova_secret'
+
+// Bucket exclusivo para avatares de conta. Nunca misturar com workspace files.
+const avatarsS3 = new S3Client({
+  endpoint: S3_ENDPOINT,
+  accessKeyId: S3_ACCESS_KEY,
+  secretAccessKey: S3_SECRET_KEY,
+  bucket: process.env.VIANOVA_AVATARS_BUCKET ?? 'vianova-avatars',
+})
+
+// Bucket para arquivos de workspaces de produto (Vianova Storage).
+export const WORKSPACE_FILES_BUCKET = process.env.VIANOVA_FILES_BUCKET ?? 'vianova-files'
+const filesS3 = new S3Client({
+  endpoint: S3_ENDPOINT,
+  accessKeyId: S3_ACCESS_KEY,
+  secretAccessKey: S3_SECRET_KEY,
+  bucket: WORKSPACE_FILES_BUCKET,
 })
 
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024 // 2 MB
@@ -29,11 +40,11 @@ const EXTENSION_TYPES: Record<string, string> = {
 }
 
 export async function putAvatar(name: string, file: File) {
-  await s3.write(name, file, { type: file.type })
+  await avatarsS3.write(name, file, { type: file.type })
 }
 
 export async function getAvatar(name: string) {
-  const ref = s3.file(name)
+  const ref = avatarsS3.file(name)
   if (!(await ref.exists())) return null
   const ext = name.split('.').pop() ?? ''
   return {
@@ -43,5 +54,27 @@ export async function getAvatar(name: string) {
 }
 
 export async function deleteAvatar(name: string) {
-  await s3.delete(name).catch(() => {})
+  await avatarsS3.delete(name).catch(() => {})
+}
+
+// --- Workspace files (Vianova Storage) ---
+
+export async function putWorkspaceFile(key: string, file: File) {
+  await filesS3.write(key, file, { type: file.type })
+}
+
+export async function getWorkspaceFile(key: string) {
+  const ref = filesS3.file(key)
+  if (!(await ref.exists())) return null
+  return {
+    bytes: await ref.arrayBuffer(),
+  }
+}
+
+export async function deleteWorkspaceFile(key: string) {
+  await filesS3.delete(key).catch(() => {})
+}
+
+export async function workspaceFileExists(key: string): Promise<boolean> {
+  return filesS3.file(key).exists()
 }

@@ -353,7 +353,7 @@ function SessionsSection() {
             variant="secondary"
             onClick={handleRevokeAll}
             loading={revoking}
-            className="text-xs font-bold shrink-0 text-red-600 border-red-200 hover:bg-red-50 active:scale-97 transition-all duration-150 ease-out"
+            className="text-xs font-bold shrink-0 text-red-600 border-red-200 hover:bg-red-50 active:scale-97 transition-all duration-150 ease-out w-full sm:w-auto"
           >
             <LogOut size={14} className="mr-1.5 inline" /> Encerrar todas as outras sessões
           </Button>
@@ -373,7 +373,7 @@ function SessionsSection() {
             return (
               <div
                 key={s.id}
-                className={`p-4 rounded-xl border flex items-center justify-between gap-4 transition-all duration-150 ease-out ${
+                className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-150 ease-out ${
                   s.isCurrent ? 'border-via-600 bg-via-50/60 ring-1 ring-via-600 shadow-2xs' : 'border-line hover:border-line-strong bg-paper'
                 }`}
               >
@@ -402,7 +402,7 @@ function SessionsSection() {
                     variant="secondary"
                     onClick={() => handleRevokeSingle(s.id)}
                     loading={revokingId === s.id}
-                    className="shrink-0 text-xs font-semibold py-1.5 px-3 text-red-600 border-red-200 hover:bg-red-50 active:scale-97 transition-transform duration-150 ease-out"
+                    className="shrink-0 text-xs font-semibold py-1.5 px-3 text-red-600 border-red-200 hover:bg-red-50 active:scale-97 transition-transform duration-150 ease-out w-full sm:w-auto"
                   >
                     Encerrar
                   </Button>
@@ -643,11 +643,11 @@ function DeleteAccountModal({ onClose, onSuccess }: { onClose: () => void; onSuc
 
           {error && <ErrorNote>{error}</ErrorNote>}
 
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={loading} className="w-full sm:w-auto">
               Voltar
             </Button>
-            <Button type="submit" variant="danger" loading={loading} className="font-bold">
+            <Button type="submit" variant="danger" loading={loading} className="font-bold w-full sm:w-auto">
               Agendar exclusão (15 dias)
             </Button>
           </div>

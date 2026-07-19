@@ -3,10 +3,42 @@ import { db, users, emailVerifications, passwordResets, totpSecrets, sessions } 
 import { eq, and, gt, isNull, ne } from 'drizzle-orm'
 import { generateId, generateToken, hashToken, generateBackupCodes } from '../lib/crypto'
 import { createSession, deleteSession, deleteAllUserSessions, SESSION_COOKIE } from '../lib/session'
-import { sendVerificationEmail, sendPasswordResetEmail } from '../lib/email'
+import { sendVerificationEmail, sendPasswordResetEmail, sendSecurityAlertEmail } from '../lib/email'
 import { generateTotpSecret, getTotpUri, verifyTotp } from '../lib/totp'
 import { enqueue } from '../lib/queue'
+import { notifyUser } from '../lib/notifications'
 import { authPlugin } from '../plugins/auth'
+
+const WEB_URL = process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'
+
+async function securityNotify(
+  userId: string,
+  title: string,
+  description: string,
+  metadata?: Record<string, unknown>,
+) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+  if (!user) return
+  try {
+    await notifyUser({
+      userId: user.id,
+      type: 'security',
+      source: 'vianova',
+      title,
+      body: description,
+      actionUrl: `${WEB_URL}/security`,
+      actionLabel: 'Ver segurança da conta',
+      metadata: metadata ?? {},
+      email: {
+        to: user.email,
+        name: user.name,
+        send: (email, name) => sendSecurityAlertEmail(email, name, title, description),
+      },
+    })
+  } catch (err) {
+    console.error('[security:notify]', err)
+  }
+}
 
 export const authRoutes = new Elysia({ prefix: '/auth' })
   .use(authPlugin)
@@ -154,6 +186,14 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         path: '/',
         maxAge: 60 * 60 * 24 * 30,
       })
+
+      // Notifica o usuário sobre o novo acesso, mas não bloqueia o login.
+      securityNotify(
+        user.id,
+        'Novo acesso à sua conta',
+        `Detectamos um novo login no seu endereço ${ip ?? 'desconhecido'}. Se não foi você, altere sua senha imediatamente.`,
+        { ip, userAgent },
+      ).catch(() => {})
 
       return {
         user: {
@@ -441,6 +481,8 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         await enqueue({ type: 'session:revoked', userId: reset.userId, sessionIds: revokedSessionIds })
       }
 
+      await securityNotify(reset.userId, 'Senha redefinida', 'A senha da sua conta Vianova foi redefinida por meio do link de recuperação. Todas as sessões ativas foram encerradas.')
+
       return { message: 'Senha alterada com sucesso.' }
     },
     {
@@ -518,6 +560,8 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 
       await db.update(users).set({ twoFactorEnabled: true }).where(eq(users.id, session.userId))
 
+      await securityNotify(session.userId, 'Verificação em duas etapas ativada', 'A autenticação em duas etapas (2FA) foi ativada na sua conta. Guarde os códigos de recuperação em um local seguro.')
+
       return { backupCodes: plainBackupCodes }
     },
     { body: t.Object({ code: t.String() }) },
@@ -553,6 +597,8 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
       await db.delete(totpSecrets).where(eq(totpSecrets.userId, session.userId))
       await db.update(users).set({ twoFactorEnabled: false }).where(eq(users.id, session.userId))
 
+      await securityNotify(session.userId, 'Verificação em duas etapas desativada', 'A autenticação em duas etapas (2FA) foi desativada na sua conta. Recomendamos mantê-la ativa para maior segurança.')
+
       return { message: '2FA desativado.' }
     },
     { body: t.Object({ code: t.String() }) },
@@ -580,6 +626,8 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 
       const passwordHash = await Bun.password.hash(body.newPassword, 'argon2id')
       await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, session.userId))
+
+      await securityNotify(session.userId, 'Senha alterada', 'A senha da sua conta Vianova foi alterada. Se não foi você, entre em contato com o suporte.')
 
       return { message: 'Senha alterada com sucesso.' }
     },

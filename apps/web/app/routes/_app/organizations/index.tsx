@@ -49,7 +49,7 @@ function OrganizationsPage() {
 
   return (
     <div className="max-w-2xl space-y-8">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight">Organizações</h1>
           <p className="mt-1 text-sm text-ink-500">
@@ -58,7 +58,7 @@ function OrganizationsPage() {
           </p>
         </div>
         {!creating && organizations && organizations.length > 0 && (
-          <Button variant="secondary" onClick={() => setCreating(true)}>
+          <Button variant="secondary" onClick={() => setCreating(true)} className="w-full sm:w-auto">
             Criar organização
           </Button>
         )}
@@ -79,11 +79,11 @@ function OrganizationsPage() {
               />
             </Field>
             {error && <ErrorNote>{error}</ErrorNote>}
-            <div className="flex gap-3">
-              <Button type="submit" loading={loading}>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button type="submit" loading={loading} className="w-full sm:w-auto">
                 Criar organização
               </Button>
-              <Button type="button" variant="ghost" onClick={() => setCreating(false)}>
+              <Button type="button" variant="ghost" onClick={() => setCreating(false)} className="w-full sm:w-auto">
                 Cancelar
               </Button>
             </div>
@@ -99,7 +99,7 @@ function OrganizationsPage() {
           <p className="mt-1 mb-5 text-sm text-ink-500">
             Crie uma organização para agrupar os workspaces da sua empresa.
           </p>
-          <Button onClick={() => setCreating(true)}>Criar organização</Button>
+          <Button onClick={() => setCreating(true)} className="w-full sm:w-auto">Criar organização</Button>
         </Card>
       ) : (
         <div className="space-y-3">

@@ -42,7 +42,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Cria o bucket de avatares na primeira subida e encerra.
+  # Cria os buckets do Vianova na primeira subida e encerra.
   minio-init:
     image: minio/mc:latest
     depends_on:
@@ -51,7 +51,8 @@ services:
     entrypoint: >
       /bin/sh -c "
       mc alias set local http://minio:9000 vianova vianova_secret &&
-      mc mb --ignore-existing local/vianova-avatars
+      mc mb --ignore-existing local/vianova-avatars &&
+      mc mb --ignore-existing local/vianova-files
       "
 
   mailpit:

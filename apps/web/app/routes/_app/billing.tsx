@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { CalendarClock, Package, Undo2 } from 'lucide-react'
+import { CalendarClock, HardDrive, Package, Undo2, Upload, Users, Link2, Zap, Megaphone, Workflow } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button, Card, ErrorNote, StatusDot } from '../../components/ui'
 
@@ -56,11 +56,42 @@ function formatDate(value: string | Date): string {
   return new Date(value).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log10(bytes) / Math.log10(1024))
+  const value = bytes / 1024 ** i
+  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
+
 const limitLabels: Record<string, string> = {
   seats: 'Assentos',
   connections: 'Conexões',
-  messagesPerMonth: 'Mensagens/mês',
+  creditsPerCycle: 'Créditos/ciclo',
   campaignsPerMonth: 'Campanhas/mês',
+  automations: 'Automações',
+  storageBytes: 'Armazenamento',
+  maxFileSizeBytes: 'Tamanho máx. por arquivo',
+}
+
+const limitIcons: Record<string, typeof Users> = {
+  seats: Users,
+  connections: Link2,
+  creditsPerCycle: Zap,
+  campaignsPerMonth: Megaphone,
+  automations: Workflow,
+  storageBytes: HardDrive,
+  maxFileSizeBytes: Upload,
+}
+
+const limitOrder = ['seats', 'connections', 'creditsPerCycle', 'campaignsPerMonth', 'automations', 'storageBytes', 'maxFileSizeBytes']
+
+function formatLimitValue(key: string, value: number): string {
+  if (key === 'storageBytes' || key === 'maxFileSizeBytes') {
+    return formatBytes(value)
+  }
+  if (key === 'automations' && value < 0) return 'ilimitado'
+  return value.toLocaleString('pt-BR')
 }
 
 const statusInfo: Record<string, { label: string; tone: 'ok' | 'warn' | 'danger' | 'muted' }> = {
@@ -251,27 +282,40 @@ function SubscriptionCard({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            {Object.entries(effectiveLimits).map(([key, limit]) => {
-              const currentUsage = item.usage ? (item.usage[key] ?? 0) : null
-              const percent = currentUsage !== null && limit > 0 ? Math.min(100, Math.round((currentUsage / limit) * 100)) : 0
-              return (
+            {limitOrder
+              .filter((key) => key in effectiveLimits)
+              .map((key) => {
+                const limit = effectiveLimits[key]!
+                const isCapacity = key === 'storageBytes'
+                const isLimitOnly = key === 'maxFileSizeBytes'
+                const currentUsage = item.usage && isCapacity ? (item.usage[key] ?? 0) : null
+                const percent = currentUsage !== null && limit > 0 ? Math.min(100, Math.round((currentUsage / limit) * 100)) : 0
+                const Icon = limitIcons[key]
+                return (
                 <div key={key} className="bg-paper rounded-ctrl px-3.5 py-3 border border-line/70 flex flex-col justify-between shadow-2xs hover:border-via-500/40 transition-colors">
                   <div>
-                    <p className="text-[11px] font-bold text-ink-500 uppercase tracking-wider">{limitLabels[key] ?? key}</p>
+                    <div className="flex items-center gap-1.5 text-ink-500">
+                      {Icon && <Icon size={13} aria-hidden="true" />}
+                      <p className="text-[11px] font-bold uppercase tracking-wider">{limitLabels[key] ?? key}</p>
+                    </div>
                     <p className="font-mono text-base font-bold text-ink-900 mt-1">
-                      {currentUsage !== null ? (
-                        <span className="text-via-600">{currentUsage.toLocaleString('pt-BR')}</span>
+                      {isLimitOnly ? (
+                        <span className="text-via-600">{formatLimitValue(key, limit)}</span>
+                      ) : currentUsage !== null ? (
+                        <>
+                          <span className="text-via-600">{formatLimitValue(key, currentUsage)}</span>
+                          <span className="text-ink-400 font-normal text-xs"> / {formatLimitValue(key, limit)}</span>
+                        </>
                       ) : (
-                        <span className="text-ink-400">—</span>
+                        <span className="text-via-600">{formatLimitValue(key, limit)}</span>
                       )}
-                      <span className="text-ink-400 font-normal text-xs"> / {limit.toLocaleString('pt-BR')}</span>
                     </p>
                   </div>
-                  {currentUsage !== null && (
+                  {isCapacity && currentUsage !== null && (
                     <div className="w-full bg-line/80 h-1.5 rounded-full overflow-hidden mt-3">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
-                          percent > 85 ? 'bg-error-500' : percent > 60 ? 'bg-amber-500' : 'bg-via-500'
+                          percent > 85 ? 'bg-danger-600' : percent > 60 ? 'bg-warn-600' : 'bg-via-500'
                         }`}
                         style={{ width: `${percent}%` }}
                       />
@@ -294,7 +338,7 @@ function SubscriptionCard({
                 {item.addons.map((addon) => (
                   <li
                     key={addon.id}
-                    className="flex items-center gap-3 rounded-ctrl border border-line/70 bg-paper px-3.5 py-2.5"
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-ctrl border border-line/70 bg-paper px-3.5 py-2.5"
                   >
                     <span className="grid size-8 shrink-0 place-items-center rounded-ctrl bg-via-500/10 text-via-600">
                       <Package size={15} aria-hidden="true" />
@@ -305,17 +349,17 @@ function SubscriptionCard({
                       </p>
                       <p className="text-xs text-ink-500">
                         {formatPrice(addon.priceCents * addon.quantity)}/mês
-                        {addon.unitLabel ? ` — ${formatPrice(addon.priceCents)} por ${addon.unitLabel}` : ''}
+                        {addon.unitLabel ? ` (${formatPrice(addon.priceCents)} por ${addon.unitLabel})` : ''}
                       </p>
                     </div>
                     {confirming === `addon:${addon.addonTypeId}` ? (
-                      <span className="flex items-center gap-2 shrink-0">
+                      <span className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0 w-full sm:w-auto">
                         <span className="text-xs text-ink-500 hidden sm:inline">
                           Sai da próxima fatura; o já pago vale até o fim do ciclo.
                         </span>
                         <Button
                           variant="danger"
-                          className="h-8 px-3 text-xs"
+                          className="h-8 px-3 text-xs w-full sm:w-auto"
                           loading={busy === `addon:${addon.addonTypeId}`}
                           onClick={() => removeAddon(addon.addonTypeId)}
                         >
@@ -323,7 +367,7 @@ function SubscriptionCard({
                         </Button>
                         <button
                           onClick={() => setConfirming(null)}
-                          className="text-xs font-medium text-ink-500 hover:text-ink-900 transition-colors"
+                          className="text-xs font-medium text-ink-500 hover:text-ink-900 transition-colors text-center"
                         >
                           Voltar
                         </button>
@@ -331,7 +375,7 @@ function SubscriptionCard({
                     ) : (
                       <button
                         onClick={() => setConfirming(`addon:${addon.addonTypeId}`)}
-                        className="shrink-0 text-xs font-medium text-ink-400 hover:text-error-600 transition-colors"
+                        className="shrink-0 px-3 py-1.5 rounded-ctrl text-xs font-semibold text-danger-600 bg-danger-50 hover:bg-danger-600 hover:text-white transition-colors w-full sm:w-auto"
                       >
                         Remover
                       </button>
@@ -343,16 +387,16 @@ function SubscriptionCard({
           )}
 
           {paidActive && (
-            <div className="pt-4 border-t border-line/60 flex items-center justify-between gap-3 flex-wrap">
+            <div className="pt-4 border-t border-line/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               {item.subscription.cancelAtPeriodEnd ? (
                 <>
                   <p className="text-xs text-ink-500 flex items-center gap-1.5">
                     <CalendarClock size={13} className="text-amber-500 shrink-0" aria-hidden="true" />
-                    Cancelamento agendado — o workspace volta ao plano grátis no fim do período.
+                    Cancelamento agendado. O workspace volta ao plano grátis no fim do período.
                   </p>
                   <Button
                     variant="secondary"
-                    className="h-8 px-3 text-xs gap-1.5"
+                    className="h-8 px-3 text-xs gap-1.5 w-full sm:w-auto"
                     loading={busy === 'resume'}
                     onClick={resumeSubscription}
                   >
@@ -361,29 +405,31 @@ function SubscriptionCard({
                   </Button>
                 </>
               ) : confirming === 'cancel' ? (
-                <div className="flex items-center gap-2 flex-wrap ml-auto">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto sm:ml-auto">
                   <span className="text-xs text-ink-500">
                     O plano segue ativo até o fim do período pago. Confirmar?
                   </span>
-                  <Button
-                    variant="danger"
-                    className="h-8 px-3 text-xs"
-                    loading={busy === 'cancel'}
-                    onClick={cancelSubscription}
-                  >
-                    Cancelar assinatura
-                  </Button>
-                  <button
-                    onClick={() => setConfirming(null)}
-                    className="text-xs font-medium text-ink-500 hover:text-ink-900 transition-colors"
-                  >
-                    Voltar
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="danger"
+                      className="h-8 px-3 text-xs"
+                      loading={busy === 'cancel'}
+                      onClick={cancelSubscription}
+                    >
+                      Cancelar assinatura
+                    </Button>
+                    <button
+                      onClick={() => setConfirming(null)}
+                      className="text-xs font-medium text-ink-500 hover:text-ink-900 transition-colors"
+                    >
+                      Voltar
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <button
                   onClick={() => setConfirming('cancel')}
-                  className="ml-auto text-xs font-medium text-ink-400 hover:text-error-600 transition-colors"
+                  className="sm:ml-auto px-3 py-1.5 rounded-ctrl text-xs font-semibold text-danger-600 bg-danger-50 hover:bg-danger-600 hover:text-white transition-colors w-full sm:w-auto"
                 >
                   Cancelar assinatura
                 </button>

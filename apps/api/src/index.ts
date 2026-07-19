@@ -10,6 +10,8 @@ import { catalogRoutes } from './routes/catalog'
 import { oidcRoutes } from './routes/oidc'
 import { internalRoutes } from './routes/internal'
 import { billingRoutes } from './routes/billing'
+import { filesRoutes } from './routes/files'
+import { notificationRoutes } from './routes/notifications'
 import { startWorker } from './lib/queue'
 
 const app = new Elysia()
@@ -48,6 +50,8 @@ const app = new Elysia()
   .use(oidcRoutes)
   .use(internalRoutes)
   .use(billingRoutes)
+  .use(filesRoutes)
+  .use(notificationRoutes)
   .get('/health', () => ({ status: 'ok', service: 'vianova-api' }))
   .listen(process.env.PORT ?? 5000)
 

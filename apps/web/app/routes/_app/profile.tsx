@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react'
 import { api } from '../../lib/api'
-import { Button, Card, ErrorNote, Field, SectionTitle, StatusDot } from '../../components/ui'
+import { Button, Card, ErrorNote, Field, SectionTitle, StatusDot, ToggleRow } from '../../components/ui'
 import { Avatar, type AvatarFrame } from '../../components/avatar'
 
 export const Route = createFileRoute('/_app/profile')({
@@ -206,7 +206,7 @@ function ProfilePage() {
           </p>
         </div>
 
-        <div className="bg-paper border border-line rounded-xl p-3.5 shadow-2xs flex items-center gap-3.5 shrink-0 max-w-xs">
+        <div className="bg-paper border border-line rounded-xl p-3.5 shadow-2xs flex items-center gap-3.5 shrink-0 w-full md:w-auto md:max-w-xs">
           <Avatar name={name} avatarUrl={avatarUrl} frame={frame} size="md" />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
@@ -453,22 +453,17 @@ function ProfilePage() {
             </div>
 
             <div className="pt-4 border-t border-line">
-              <label className="flex items-start gap-3.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={!preferences.reducedMotion}
-                  onChange={(e) => setPreferences({ ...preferences, reducedMotion: !e.target.checked })}
-                  className="mt-1 size-4 rounded border-line text-via-600 focus:ring-via-500"
-                />
-                <div>
-                  <span className="text-sm font-bold text-ink-900 block flex items-center gap-2">
+              <ToggleRow
+                id="smooth-motion"
+                label={
+                  <span className="flex items-center gap-2">
                     <Sparkles size={16} className="text-via-600" /> Transições e animações suaves
                   </span>
-                  <span className="text-xs text-ink-500 block mt-0.5 leading-relaxed">
-                    Ativa animações fluidas na abertura de janelas, barras de progresso e cartões por todo o sistema. Desmarque se preferir uma navegação simplificada sem animações.
-                  </span>
-                </div>
-              </label>
+                }
+                hint="Ativa animações fluidas na abertura de janelas, barras de progresso e cartões por todo o sistema. Desmarque se preferir uma navegação simplificada sem animações."
+                checked={!preferences.reducedMotion}
+                onChange={(checked) => setPreferences({ ...preferences, reducedMotion: !checked })}
+              />
             </div>
           </Card>
         )}
@@ -481,50 +476,35 @@ function ProfilePage() {
             </p>
 
             <div className="space-y-4 divide-y divide-line/60">
-              <label className="flex items-start justify-between gap-4 pt-3 first:pt-0 cursor-pointer">
-                <div>
-                  <span className="text-sm font-bold text-ink-900 block">Alertas de Fatura e Cobrança Stripe</span>
-                  <span className="text-xs text-ink-500 block mt-0.5">
-                    Receba notificações de renovação de plano, notas fiscais emitidas e relatórios mensais de consumo dos seus workspaces.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
+              <div className="pt-3 first:pt-0">
+                <ToggleRow
+                  id="billing-alerts"
+                  label="Alertas de Fatura e Cobrança Stripe"
+                  hint="Receba notificações de renovação de plano, notas fiscais emitidas e relatórios mensais de consumo dos seus workspaces."
                   checked={preferences.billingAlerts}
-                  onChange={(e) => setPreferences({ ...preferences, billingAlerts: e.target.checked })}
-                  className="size-4 rounded border-line text-via-600 focus:ring-via-500 shrink-0 mt-1"
+                  onChange={(checked) => setPreferences({ ...preferences, billingAlerts: checked })}
                 />
-              </label>
+              </div>
 
-              <label className="flex items-start justify-between gap-4 pt-4 cursor-pointer">
-                <div>
-                  <span className="text-sm font-bold text-ink-900 block">Segurança e Monitoramento de Conta</span>
-                  <span className="text-xs text-ink-500 block mt-0.5">
-                    Avisos automáticos sobre novos dispositivos conectados, encerramentos de sessão e alterações de senha.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
+              <div className="pt-4">
+                <ToggleRow
+                  id="security-alerts"
+                  label="Segurança e Monitoramento de Conta"
+                  hint="Avisos automáticos sobre novos dispositivos conectados, encerramentos de sessão e alterações de senha."
                   checked={preferences.securityAlerts}
-                  onChange={(e) => setPreferences({ ...preferences, securityAlerts: e.target.checked })}
-                  className="size-4 rounded border-line text-via-600 focus:ring-via-500 shrink-0 mt-1"
+                  onChange={(checked) => setPreferences({ ...preferences, securityAlerts: checked })}
                 />
-              </label>
+              </div>
 
-              <label className="flex items-start justify-between gap-4 pt-4 cursor-pointer">
-                <div>
-                  <span className="text-sm font-bold text-ink-900 block">Novidades e Lançamentos do Ecossistema</span>
-                  <span className="text-xs text-ink-500 block mt-0.5">
-                    Fique por dentro de novas funcionalidades, melhorias no Naia Campanhas/CRM e recursos de IA assistida.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
+              <div className="pt-4">
+                <ToggleRow
+                  id="marketing-emails"
+                  label="Novidades e Lançamentos do Ecossistema"
+                  hint="Fique por dentro de novas funcionalidades, melhorias no Naia Campanhas/CRM e recursos de IA assistida."
                   checked={preferences.marketingEmails}
-                  onChange={(e) => setPreferences({ ...preferences, marketingEmails: e.target.checked })}
-                  className="size-4 rounded border-line text-via-600 focus:ring-via-500 shrink-0 mt-1"
+                  onChange={(checked) => setPreferences({ ...preferences, marketingEmails: checked })}
                 />
-              </label>
+              </div>
             </div>
           </Card>
         )}
@@ -551,7 +531,7 @@ function ProfilePage() {
                   <a
                     href="http://localhost:3001"
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-via-600 hover:text-via-700"
                   >
                     Abrir Naia Campanhas <ExternalLink size={13} />
@@ -571,7 +551,7 @@ function ProfilePage() {
                   <a
                     href="http://localhost:3002"
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-via-600 hover:text-via-700"
                   >
                     Abrir Naia CRM <ExternalLink size={13} />
@@ -601,7 +581,7 @@ function ProfilePage() {
             </Card>
 
             <Card className="p-6 space-y-4 border-line bg-paper/50">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h3 className="font-display font-bold text-base text-ink-900">Encerramento e Segurança da Conta</h3>
                   <p className="text-sm text-ink-500 mt-1">
@@ -610,7 +590,7 @@ function ProfilePage() {
                 </div>
                 <Link
                   to="/security"
-                  className="shrink-0 text-sm font-bold text-via-600 hover:text-via-700 bg-via-50 px-4 py-2 rounded-ctrl border border-via-200"
+                  className="shrink-0 text-sm font-bold text-via-600 hover:text-via-700 bg-via-50 px-4 py-2 rounded-ctrl border border-via-200 text-center w-full sm:w-auto"
                 >
                   Ir para Segurança ›
                 </Link>
@@ -620,12 +600,12 @@ function ProfilePage() {
         )}
 
         {activeTab !== 'apps' && (
-          <div className="flex items-center justify-between pt-4 border-t border-line">
-            <div className="text-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-line">
+            <div className="text-sm w-full sm:w-auto">
               {error && <ErrorNote>{error}</ErrorNote>}
               {saved && <span className="text-emerald-600 font-bold inline-flex items-center gap-1.5"><Check size={16} /> Alterações de perfil salvas com sucesso!</span>}
             </div>
-            <Button type="submit" loading={loading} className="font-bold px-6 shadow-xs">
+            <Button type="submit" loading={loading} className="font-bold px-6 shadow-xs w-full sm:w-auto">
               Salvar alterações
             </Button>
           </div>
@@ -635,16 +615,16 @@ function ProfilePage() {
       <section className="space-y-3 pt-4 border-t border-line">
         <SectionTitle>Métodos de Acesso</SectionTitle>
         <Card className="divide-y divide-line">
-          <div className="flex items-center justify-between p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
             <div>
               <p className="text-sm font-bold text-ink-900">E-mail e senha</p>
               <p className="text-xs text-ink-500 font-mono mt-0.5">{user.email}</p>
             </div>
-            <span className="flex items-center gap-2 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+            <span className="flex items-center gap-2 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 self-start sm:self-auto">
               <StatusDot tone="ok" /> Ativo
             </span>
           </div>
-          <div className="flex items-center justify-between p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
             <div>
               <p className="text-sm font-bold text-ink-900">Verificação em duas etapas</p>
               <p className="text-xs text-ink-500 mt-0.5">
@@ -652,13 +632,13 @@ function ProfilePage() {
               </p>
             </div>
             {user.twoFactorEnabled ? (
-              <span className="flex items-center gap-2 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+              <span className="flex items-center gap-2 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 self-start sm:self-auto">
                 <StatusDot tone="ok" /> Ativa
               </span>
             ) : (
               <Link
                 to="/security"
-                className="text-sm font-bold text-via-600 hover:text-via-700 bg-via-50 px-3 py-1.5 rounded-ctrl border border-via-200"
+                className="text-sm font-bold text-via-600 hover:text-via-700 bg-via-50 px-3 py-1.5 rounded-ctrl border border-via-200 self-start sm:self-auto text-center"
               >
                 Configurar ›
               </Link>

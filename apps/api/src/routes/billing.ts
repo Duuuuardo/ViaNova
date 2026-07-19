@@ -23,7 +23,10 @@ import {
   sendCancelScheduledEmail,
   sendSubscriptionEndedEmail,
   sendPaymentFailedEmail,
+  sendInvoicePaidEmail,
+  sendUpcomingRenewalEmail,
 } from '../lib/email'
+import { notifyUser } from '../lib/notifications'
 import { authPlugin } from '../plugins/auth'
 
 const WEB_URL = process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'
@@ -32,6 +35,65 @@ const ACTIVE_STRIPE_STATUSES = ['active', 'trialing', 'past_due']
 
 function hasActiveStripeSubscription(row: ProductSubscription): boolean {
   return Boolean(row.stripeSubscriptionId) && ACTIVE_STRIPE_STATUSES.includes(row.status)
+}
+
+const INTERNAL_SECRET = process.env.VIANOVA_INTERNAL_SECRET ?? 'vianova-internal-secret'
+
+function verifyInternalSecret(headers: Record<string, string | undefined>) {
+  return headers['x-internal-secret'] === INTERNAL_SECRET
+}
+
+// Garante uma subscription free para um workspace de produto. Chamada
+// service-to-service pelo produto na criação do workspace.
+async function ensureFreeSubscription(data: {
+  productSlug: string
+  workspaceId: string
+  workspaceName?: string | null
+  ownerUserId: string
+  organizationId?: string | null
+}) {
+  const [existing] = await db
+    .select()
+    .from(productSubscriptions)
+    .where(
+      and(
+        eq(productSubscriptions.productSlug, data.productSlug),
+        eq(productSubscriptions.workspaceId, data.workspaceId),
+      ),
+    )
+    .limit(1)
+
+  if (existing) return existing
+
+  const [freePlan] = await db
+    .select()
+    .from(productPlans)
+    .where(and(eq(productPlans.productSlug, data.productSlug), eq(productPlans.priceCents, 0)))
+    .limit(1)
+
+  if (!freePlan) throw new Error(`Plano grátis não encontrado para ${data.productSlug}`)
+
+  const [sub] = await db
+    .insert(productSubscriptions)
+    .values({
+      id: generateId(),
+      productSlug: data.productSlug,
+      workspaceId: data.workspaceId,
+      workspaceName: data.workspaceName ?? null,
+      organizationId: data.organizationId ?? null,
+      ownerUserId: data.ownerUserId,
+      planId: freePlan.id,
+      status: 'active',
+    })
+    .returning()
+
+  await enqueue({
+    type: 'entitlements:sync',
+    productSlug: data.productSlug,
+    workspaceId: data.workspaceId,
+  })
+
+  return sub
 }
 
 // Versões novas da API do Stripe movem current_period_* pro item da
@@ -80,18 +142,44 @@ async function getOrCreateStripeCustomer(
 }
 
 // Notificações de billing vão sempre pro dono do workspace, respeitando a
-// preferência billingAlerts da conta.
-async function notifyOwner(
+// preferência billingAlerts da conta. Cria notificação in-app e, se permitido,
+// envia o email correspondente.
+async function notifyBillingOwner(
   row: ProductSubscription,
-  fn: (email: string, name: string) => Promise<void>,
+  options: {
+    title: string
+    body: string
+    actionUrl?: string
+    actionLabel?: string
+    metadata?: Record<string, unknown>
+    email: (email: string, name: string) => Promise<void>
+  },
 ) {
   if (!row.ownerUserId) return
   const [user] = await db.select().from(users).where(eq(users.id, row.ownerUserId)).limit(1)
-  if (!user || user.preferences?.billingAlerts === false) return
+  if (!user) return
+
   try {
-    await fn(user.email, user.name)
+    await notifyUser({
+      userId: user.id,
+      type: 'billing',
+      source: 'vianova',
+      sourceProductSlug: row.productSlug,
+      sourceWorkspaceId: row.workspaceId,
+      sourceWorkspaceName: row.workspaceName,
+      title: options.title,
+      body: options.body,
+      actionUrl: options.actionUrl ?? `${WEB_URL}/billing`,
+      actionLabel: options.actionLabel ?? 'Ver assinaturas',
+      metadata: options.metadata ?? {},
+      email: {
+        to: user.email,
+        name: user.name,
+        send: options.email,
+      },
+    })
   } catch (err) {
-    console.error('[billing:email]', err)
+    console.error('[billing:notify]', err)
   }
 }
 
@@ -211,7 +299,7 @@ async function loadSubscriptionsWithDetails(subIds: string[]) {
             ...row.plan,
             limits: {
               ...row.plan.limits,
-              messagesPerMonth: 3,
+              creditsPerCycle: 3,
               campaignsPerMonth: 1,
             },
           }
@@ -236,7 +324,7 @@ async function loadSubscriptionsWithDetails(subIds: string[]) {
         }
       }
       if (!usage && row.product.slug === 'naia') {
-        usage = { seats: 1, connections: 1, messagesPerMonth: 0, campaignsPerMonth: 0 }
+        usage = { seats: 1, connections: 1, creditsBalance: 0, campaignsPerMonth: 0 }
       }
 
       return { ...row, plan, addons, invoices: subInvoices, usage }
@@ -460,9 +548,13 @@ export const billingRoutes = new Elysia()
           const [currentPlan] = subRow!.planId
             ? await db.select().from(productPlans).where(eq(productPlans.id, subRow!.planId)).limit(1)
             : []
-          await notifyOwner(subRow!, (email, name) =>
-            sendCancelScheduledEmail(email, name, productName, currentPlan?.name ?? 'atual', periodEnd),
-          )
+          await notifyBillingOwner(subRow!, {
+            title: 'Cancelamento agendado',
+            body: `O plano ${currentPlan?.name ?? 'atual'} do ${productName} permanece ativo até ${periodEnd.toLocaleDateString('pt-BR')}. Depois disso, o workspace volta ao plano grátis.`,
+            actionLabel: 'Retomar assinatura',
+            metadata: { planName: currentPlan?.name ?? 'atual', periodEnd: periodEnd.toISOString() },
+            email: (email, name) => sendCancelScheduledEmail(email, name, productName, currentPlan?.name ?? 'atual', periodEnd),
+          })
 
           return { scheduled: true as const, effectiveAt: periodEnd.toISOString() }
         }
@@ -493,25 +585,60 @@ export const billingRoutes = new Elysia()
       }
 
       // Assinatura paga já ativa: troca de plano em cima da subscription
-      // existente, com proração — sem novo checkout.
+      // existente, sem novo checkout.
       if (hasActiveStripeSubscription(subRow!)) {
         const stripeSub = await stripe.subscriptions.retrieve(subRow!.stripeSubscriptionId!)
         const baseItem = await findBasePlanItem(stripeSub, body.product_slug)
 
-        await stripe.subscriptions.update(subRow!.stripeSubscriptionId!, {
+        const [currentPlanRow] = subRow!.planId
+          ? await db.select().from(productPlans).where(eq(productPlans.id, subRow!.planId)).limit(1)
+          : []
+        const isUpgrade = (currentPlanRow?.priceCents ?? 0) < plan.priceCents
+
+        // Upgrade: cobra o ciclo integral e reinicia a data de faturamento.
+        // Isso evita o ataque de fazer upgrade no último dia do ciclo,
+        // pagar quase nada e usar limites altos por poucas horas.
+        const updateParams: Stripe.SubscriptionUpdateParams = {
           items: [
             baseItem
               ? { id: baseItem.id, price: plan.stripePriceId }
               : { price: plan.stripePriceId, quantity: 1 },
           ],
-          proration_behavior: 'always_invoice',
+          ...(isUpgrade
+            ? { billing_cycle_anchor: 'now', proration_behavior: 'none' }
+            : { proration_behavior: 'always_invoice' }),
           cancel_at_period_end: false,
           metadata: { ...stripeSub.metadata, planId: plan.id },
-        })
+        }
+        console.log('[billing:upgrade] subscriptionId=%s params=%s', subRow!.stripeSubscriptionId!, JSON.stringify(updateParams))
+        const updatedSub = await stripe.subscriptions.update(subRow!.stripeSubscriptionId!, updateParams)
 
+        // O plano só é aplicado se o pagamento do upgrade for aprovado.
+        // Com billing_cycle_anchor='now' o Stripe cobra imediatamente; se o
+        // cartão falhar, a invoice não fica paga e mantemos o plano anterior.
+        const latestInvoiceId =
+          typeof updatedSub.latest_invoice === 'string'
+            ? updatedSub.latest_invoice
+            : updatedSub.latest_invoice?.id
+        const latestInvoice = latestInvoiceId
+          ? await stripe.invoices.retrieve(latestInvoiceId)
+          : null
+        if (latestInvoice?.status !== 'paid') {
+          set.status = 402
+          return { message: 'Pagamento do upgrade não foi aprovado. O plano atual não foi alterado.' }
+        }
+
+        const period = subscriptionPeriod(updatedSub)
         await db
           .update(productSubscriptions)
-          .set({ planId: plan.id, cancelAtPeriodEnd: false, status: 'active', updatedAt: new Date() })
+          .set({
+            planId: plan.id,
+            cancelAtPeriodEnd: false,
+            status: updatedSub.status,
+            ...(period.start ? { currentPeriodStart: period.start } : {}),
+            ...(period.end ? { currentPeriodEnd: period.end } : {}),
+            updatedAt: new Date(),
+          })
           .where(eq(productSubscriptions.id, subRow!.id))
 
         await enqueue({
@@ -520,10 +647,24 @@ export const billingRoutes = new Elysia()
           workspaceId: body.workspace_id,
         })
 
+        // Concede os créditos do novo plano imediatamente (reset de saldo).
+        const credits = (plan.limits.creditsPerCycle ?? 0)
+        if (credits > 0) {
+          await enqueue({
+            type: 'credits:grant',
+            productSlug: body.product_slug,
+            workspaceId: body.workspace_id,
+            amount: credits,
+          })
+        }
+
         const productName = await getProductName(body.product_slug)
-        await notifyOwner(subRow!, (email, name) =>
-          sendPlanChangedEmail(email, name, productName, plan.name),
-        )
+        await notifyBillingOwner(subRow!, {
+          title: 'Plano alterado',
+          body: `Seu plano no ${productName} agora é o ${plan.name}. A diferença de valor é ajustada proporcionalmente na próxima fatura.`,
+          metadata: { planName: plan.name },
+          email: (email, name) => sendPlanChangedEmail(email, name, productName, plan.name),
+        })
 
         return { changed: true as const }
       }
@@ -621,9 +762,13 @@ export const billingRoutes = new Elysia()
     const [plan] = subRow.planId
       ? await db.select().from(productPlans).where(eq(productPlans.id, subRow.planId)).limit(1)
       : []
-    await notifyOwner(subRow, (email, name) =>
-      sendCancelScheduledEmail(email, name, productName, plan?.name ?? 'atual', periodEnd),
-    )
+    await notifyBillingOwner(subRow, {
+      title: 'Cancelamento agendado',
+      body: `O plano ${plan?.name ?? 'atual'} do ${productName} permanece ativo até ${periodEnd.toLocaleDateString('pt-BR')}. Depois disso, o workspace volta ao plano grátis.`,
+      actionLabel: 'Retomar assinatura',
+      metadata: { planName: plan?.name ?? 'atual', periodEnd: periodEnd.toISOString() },
+      email: (email, name) => sendCancelScheduledEmail(email, name, productName, plan?.name ?? 'atual', periodEnd),
+    })
 
     return { scheduled: true as const, effectiveAt: periodEnd.toISOString() }
   })
@@ -698,6 +843,14 @@ export const billingRoutes = new Elysia()
       if (!hasActiveStripeSubscription(subRow)) {
         set.status = 400
         return { message: 'Add-ons exigem uma assinatura paga ativa.' }
+      }
+
+      const [currentPlan] = subRow.planId
+        ? await db.select().from(productPlans).where(eq(productPlans.id, subRow.planId)).limit(1)
+        : []
+      if (!currentPlan || currentPlan.priceCents === 0) {
+        set.status = 400
+        return { message: 'Add-ons não estão disponíveis no plano Grátis. Faça upgrade para usar add-ons.' }
       }
 
       const [addonType] = await db
@@ -834,6 +987,18 @@ export const billingRoutes = new Elysia()
       if (!addonRow) {
         set.status = 404
         return { message: 'Add-on não encontrado nesta assinatura.' }
+      }
+
+      // Aumentar quantidade de add-on exige plano pago. Remover (quantity 0)
+      // continua permitido para quem caiu pro Grátis e quer parar de renovar.
+      if (body.quantity > 0) {
+        const [currentPlan] = subRow.planId
+          ? await db.select().from(productPlans).where(eq(productPlans.id, subRow.planId)).limit(1)
+          : []
+        if (!currentPlan || currentPlan.priceCents === 0) {
+          set.status = 400
+          return { message: 'Add-ons não estão disponíveis no plano Grátis. Faça upgrade para usar add-ons.' }
+        }
       }
 
       const stripe = getStripe()
@@ -997,9 +1162,12 @@ export const billingRoutes = new Elysia()
             .where(eq(productPlans.id, planId))
             .limit(1)
           const productName = await getProductName(productSlug)
-          await notifyOwner(subRow, (email, name) =>
-            sendSubscriptionConfirmedEmail(email, name, productName, plan?.name ?? ''),
-          )
+          await notifyBillingOwner(subRow, {
+            title: 'Assinatura confirmada',
+            body: `Sua assinatura do plano ${plan?.name ?? ''} no ${productName} está ativa. Os novos limites do seu workspace já valem a partir de agora.`,
+            metadata: { planName: plan?.name ?? '' },
+            email: (email, name) => sendSubscriptionConfirmedEmail(email, name, productName, plan?.name ?? ''),
+          })
         }
       }
     }
@@ -1021,90 +1189,116 @@ export const billingRoutes = new Elysia()
             .limit(1)
 
       if (subRow) {
-        // Espelha o plano e os add-ons a partir dos items reais da
-        // subscription — fonte da verdade é o Stripe.
-        const priceIds = sub.items.data.map((item) => item.price.id)
+        const period = subscriptionPeriod(sub)
+        const isActive = ['active', 'trialing'].includes(sub.status)
 
-        const [matchedPlan] = priceIds.length
-          ? await db
-              .select()
-              .from(productPlans)
-              .where(
-                and(
-                  eq(productPlans.productSlug, subRow.productSlug),
-                  inArray(productPlans.stripePriceId, priceIds),
-                ),
-              )
-              .limit(1)
-          : []
+        // Só espelha plano e add-ons quando a subscription está ativa.
+        // Se um upgrade falhar no pagamento, a subscription pode ter os items
+        // novos mas status past_due/unpaid — nesse caso mantemos o plano anterior
+        // no banco até o pagamento ser confirmado.
+        if (isActive) {
+          const priceIds = sub.items.data.map((item) => item.price.id)
 
-        const matchedAddonTypes = priceIds.length
-          ? await db
-              .select()
-              .from(productAddonTypes)
-              .where(
-                and(
-                  eq(productAddonTypes.productSlug, subRow.productSlug),
-                  inArray(productAddonTypes.stripePriceId, priceIds),
-                ),
-              )
-          : []
+          const [matchedPlan] = priceIds.length
+            ? await db
+                .select()
+                .from(productPlans)
+                .where(
+                  and(
+                    eq(productPlans.productSlug, subRow.productSlug),
+                    inArray(productPlans.stripePriceId, priceIds),
+                  ),
+                )
+                .limit(1)
+            : []
 
-        for (const addonType of matchedAddonTypes) {
-          const item = sub.items.data.find((i) => i.price.id === addonType.stripePriceId)
-          if (!item) continue
-          await db
-            .insert(productSubscriptionAddons)
-            .values({
-              id: generateId(),
-              productSubscriptionId: subRow.id,
-              addonTypeId: addonType.id,
-              quantity: item.quantity ?? 1,
-              stripeSubscriptionItemId: item.id,
-            })
-            .onConflictDoUpdate({
-              target: [
-                productSubscriptionAddons.productSubscriptionId,
-                productSubscriptionAddons.addonTypeId,
-              ],
-              set: {
+          const matchedAddonTypes = priceIds.length
+            ? await db
+                .select()
+                .from(productAddonTypes)
+                .where(
+                  and(
+                    eq(productAddonTypes.productSlug, subRow.productSlug),
+                    inArray(productAddonTypes.stripePriceId, priceIds),
+                  ),
+                )
+            : []
+
+          for (const addonType of matchedAddonTypes) {
+            const item = sub.items.data.find((i) => i.price.id === addonType.stripePriceId)
+            if (!item) continue
+            await db
+              .insert(productSubscriptionAddons)
+              .values({
+                id: generateId(),
+                productSubscriptionId: subRow.id,
+                addonTypeId: addonType.id,
                 quantity: item.quantity ?? 1,
                 stripeSubscriptionItemId: item.id,
-                updatedAt: new Date(),
-              },
+              })
+              .onConflictDoUpdate({
+                target: [
+                  productSubscriptionAddons.productSubscriptionId,
+                  productSubscriptionAddons.addonTypeId,
+                ],
+                set: {
+                  quantity: item.quantity ?? 1,
+                  stripeSubscriptionItemId: item.id,
+                  updatedAt: new Date(),
+                },
+              })
+          }
+
+          const keepAddonTypeIds = matchedAddonTypes.map((a) => a.id)
+          await db
+            .delete(productSubscriptionAddons)
+            .where(
+              keepAddonTypeIds.length
+                ? and(
+                    eq(productSubscriptionAddons.productSubscriptionId, subRow.id),
+                    notInArray(productSubscriptionAddons.addonTypeId, keepAddonTypeIds),
+                  )
+                : eq(productSubscriptionAddons.productSubscriptionId, subRow.id),
+            )
+
+          await db
+            .update(productSubscriptions)
+            .set({
+              status: sub.status,
+              planId: matchedPlan?.id ?? subRow.planId,
+              cancelAtPeriodEnd: sub.cancel_at_period_end,
+              ...(period.start ? { currentPeriodStart: period.start } : {}),
+              ...(period.end ? { currentPeriodEnd: period.end } : {}),
+              updatedAt: new Date(),
             })
+            .where(eq(productSubscriptions.id, subRow.id))
+        } else {
+          await db
+            .update(productSubscriptions)
+            .set({
+              status: sub.status,
+              cancelAtPeriodEnd: sub.cancel_at_period_end,
+              ...(period.start ? { currentPeriodStart: period.start } : {}),
+              ...(period.end ? { currentPeriodEnd: period.end } : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(productSubscriptions.id, subRow.id))
         }
-
-        const keepAddonTypeIds = matchedAddonTypes.map((a) => a.id)
-        await db
-          .delete(productSubscriptionAddons)
-          .where(
-            keepAddonTypeIds.length
-              ? and(
-                  eq(productSubscriptionAddons.productSubscriptionId, subRow.id),
-                  notInArray(productSubscriptionAddons.addonTypeId, keepAddonTypeIds),
-                )
-              : eq(productSubscriptionAddons.productSubscriptionId, subRow.id),
-          )
-
-        const period = subscriptionPeriod(sub)
-        await db
-          .update(productSubscriptions)
-          .set({
-            status: sub.status,
-            planId: matchedPlan?.id ?? subRow.planId,
-            cancelAtPeriodEnd: sub.cancel_at_period_end,
-            ...(period.start ? { currentPeriodStart: period.start } : {}),
-            ...(period.end ? { currentPeriodEnd: period.end } : {}),
-            updatedAt: new Date(),
-          })
-          .where(eq(productSubscriptions.id, subRow.id))
 
         await enqueue({
           type: 'entitlements:sync',
           productSlug: subRow.productSlug,
           workspaceId: subRow.workspaceId,
         })
+
+        // Cancelamento ou inadimplência: zera créditos no produto.
+        if (['canceled', 'unpaid'].includes(sub.status)) {
+          await enqueue({
+            type: 'credits:reset',
+            productSlug: subRow.productSlug,
+            workspaceId: subRow.workspaceId,
+          })
+        }
 
         // Emails de cancelamento/troca de plano saem só das rotas desta API —
         // o webhook chega em ordem imprevisível em relação ao espelhamento do
@@ -1164,10 +1358,58 @@ export const billingRoutes = new Elysia()
           workspaceId: subRow.workspaceId,
         })
 
+        // Estorno/cancelamento: zera créditos no produto.
+        await enqueue({
+          type: 'credits:reset',
+          productSlug: subRow.productSlug,
+          workspaceId: subRow.workspaceId,
+        })
+
         const productName = await getProductName(subRow.productSlug)
-        await notifyOwner(subRow, (email, name) =>
-          sendSubscriptionEndedEmail(email, name, productName),
-        )
+        await notifyBillingOwner(subRow, {
+          title: 'Assinatura encerrada',
+          body: `Sua assinatura do ${productName} foi encerrada e o workspace voltou ao plano grátis. Seus dados continuam intactos.`,
+          actionLabel: 'Ver planos',
+          metadata: {},
+          email: (email, name) => sendSubscriptionEndedEmail(email, name, productName),
+        })
+      }
+    }
+
+    // Chargeback / disputa: cancela a subscription no Stripe e zera créditos.
+    if (event.type === 'charge.dispute.created' || event.type === 'charge.dispute.funds_withdrawn') {
+      const dispute = event.data.object as Stripe.Dispute
+      const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id
+      if (!chargeId) return { received: true }
+
+      try {
+        const charge = await stripe.charges.retrieve(chargeId, {
+          expand: ['invoice'],
+        })
+        const invoice = charge.invoice as Stripe.Invoice | undefined
+        const stripeSubId = invoice?.subscription as string | undefined
+        if (!stripeSubId) return { received: true }
+
+        const [subRow] = await db
+          .select()
+          .from(productSubscriptions)
+          .where(eq(productSubscriptions.stripeSubscriptionId, stripeSubId))
+          .limit(1)
+
+        if (subRow) {
+          // Cancela imediatamente; o webhook customer.subscription.deleted
+          // já vai espelhar plano grátis + zerar créditos, mas garantimos aqui.
+          await stripe.subscriptions.cancel(stripeSubId).catch(() => {
+            // Se já estiver cancelada, ignoramos.
+          })
+          await enqueue({
+            type: 'credits:reset',
+            productSlug: subRow.productSlug,
+            workspaceId: subRow.workspaceId,
+          })
+        }
+      } catch (err) {
+        console.error('[billing:webhook] erro ao processar chargeback:', err)
       }
     }
 
@@ -1205,9 +1447,57 @@ export const billingRoutes = new Elysia()
 
           if (event.type === 'invoice.payment_failed') {
             const productName = await getProductName(subRow.productSlug)
-            await notifyOwner(subRow, (email, name) =>
-              sendPaymentFailedEmail(email, name, productName),
-            )
+            await notifyBillingOwner(subRow, {
+              title: 'Falha no pagamento',
+              body: `Não conseguimos processar o pagamento da sua assinatura do ${productName}. Vamos tentar de novo automaticamente. Se o problema persistir, atualize a forma de pagamento para não perder acesso ao seu plano.`,
+              actionLabel: 'Atualizar pagamento',
+              email: (email, name) => sendPaymentFailedEmail(email, name, productName),
+            })
+          }
+
+          if (event.type === 'invoice.paid') {
+            const inv = event.data.object as Stripe.Invoice & { billing_reason?: string }
+            const productName = await getProductName(subRow.productSlug)
+            await notifyBillingOwner(subRow, {
+              title: 'Pagamento confirmado',
+              body: `Recebemos o pagamento da sua assinatura do ${productName} no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: invoice.currency.toUpperCase() }).format(invoice.amount_paid / 100)} em ${new Date(invoice.created * 1000).toLocaleDateString('pt-BR')}.`,
+              actionUrl: invoice.hosted_invoice_url ?? `${WEB_URL}/billing`,
+              actionLabel: 'Ver nota fiscal',
+              metadata: { stripeInvoiceId: invoice.id, amountPaidCents: invoice.amount_paid },
+              email: (email, name) =>
+                sendInvoicePaidEmail(
+                  email,
+                  name,
+                  productName,
+                  invoice.hosted_invoice_url ?? `${WEB_URL}/billing`,
+                  invoice.amount_paid,
+                  invoice.currency,
+                  new Date(invoice.created * 1000),
+                ),
+            })
+
+            const isNewOrRenewal = inv.billing_reason === 'subscription_cycle' || inv.billing_reason === 'subscription_create'
+            if (isNewOrRenewal && subRow.planId) {
+              const [planRow] = await db
+                .select({ limits: productPlans.limits })
+                .from(productPlans)
+                .where(eq(productPlans.id, subRow.planId))
+                .limit(1)
+
+              let credits: number = (planRow?.limits as Record<string, number> | null)?.creditsPerCycle ?? 0
+              if (credits > 0) {
+                const addonRows = await db
+                  .select({ quantity: productSubscriptionAddons.quantity, limitsPerUnit: productAddonTypes.limitsPerUnit })
+                  .from(productSubscriptionAddons)
+                  .innerJoin(productAddonTypes, eq(productSubscriptionAddons.addonTypeId, productAddonTypes.id))
+                  .where(eq(productSubscriptionAddons.productSubscriptionId, subRow.id))
+                for (const a of addonRows) {
+                  const perUnit = (a.limitsPerUnit as Record<string, number>)?.creditsPerCycle ?? 0
+                  credits += perUnit * a.quantity
+                }
+                await enqueue({ type: 'credits:grant', productSlug: subRow.productSlug, workspaceId: subRow.workspaceId, amount: credits })
+              }
+            }
           }
         }
       }
@@ -1215,3 +1505,40 @@ export const billingRoutes = new Elysia()
 
     return { received: true }
   })
+
+  // --- Rotas internas (service-to-service, chamadas pelos produtos) ---
+
+  .post(
+    '/internal/billing/ensure-free-subscription',
+    async ({ request, body, set }) => {
+      const headers: Record<string, string | undefined> = Object.fromEntries(request.headers.entries())
+      if (!verifyInternalSecret(headers)) {
+        set.status = 401
+        return { message: 'Não autorizado.' }
+      }
+
+      try {
+        const sub = await ensureFreeSubscription({
+          productSlug: body.product_slug,
+          workspaceId: body.workspace_id,
+          workspaceName: body.workspace_name,
+          ownerUserId: body.owner_user_id,
+          organizationId: body.organization_id,
+        })
+        return { subscriptionId: sub.id, status: sub.status }
+      } catch (err) {
+        console.error('[billing:ensure-free-subscription] erro:', err)
+        set.status = 500
+        return { message: 'Erro ao garantir assinatura grátis.' }
+      }
+    },
+    {
+      body: t.Object({
+        product_slug: t.String(),
+        workspace_id: t.String(),
+        workspace_name: t.Optional(t.String()),
+        owner_user_id: t.String(),
+        organization_id: t.Optional(t.Union([t.String(), t.Null()])),
+      }),
+    },
+  )

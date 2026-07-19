@@ -1,40 +1,39 @@
-// Marca do Vianova: losango (placa de sinalização) + wordmark em Overpass.
+// Marca do Vianova: duas vias convergindo num ponto — o "V" da Vianova.
 export function ViaMark({ size = 16 }: { size?: number }) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 16 16"
+      viewBox="0 0 32 32"
+      fill="none"
       aria-hidden="true"
       className="shrink-0"
     >
-      <rect
-        x="3.3"
-        y="3.3"
-        width="9.4"
-        height="9.4"
-        rx="1.6"
-        transform="rotate(45 8 8)"
-        className="fill-via-600"
-      />
       <path
-        d="M5.6 8.2 7.3 9.9l3.1-3.6"
-        fill="none"
-        stroke="white"
-        strokeWidth="1.5"
+        d="M5 6 L16 26 L27 6"
+        stroke="url(#via-grad)"
+        strokeWidth="5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      <circle cx="16" cy="26" r="3.5" fill="#C466FF" />
+      <defs>
+        <linearGradient id="via-grad" x1="5" y1="6" x2="27" y2="26">
+          <stop offset="0%" stopColor="#D08BFF" />
+          <stop offset="100%" stopColor="#8A2CC4" />
+        </linearGradient>
+      </defs>
     </svg>
   )
 }
 
-export function ViaLogo({ dark = false }: { dark?: boolean }) {
+export function ViaLogo({ dark = false, size = 28 }: { dark?: boolean; size?: number }) {
   return (
     <span className="inline-flex items-center gap-2 select-none">
-      <ViaMark size={18} />
+      <ViaMark size={size} />
       <span
-        className={`font-display font-bold text-lg leading-none tracking-tight ${dark ? 'text-white' : 'text-ink-900'}`}
+        className={`font-display font-bold tracking-tight ${dark ? 'text-white' : 'text-ink-900'}`}
+        style={{ fontSize: size * 0.78 }}
       >
         vianova
       </span>

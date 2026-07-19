@@ -3,7 +3,7 @@ import { db, productCatalog } from '@vianova/db'
 import { eq } from 'drizzle-orm'
 import { signServiceToken } from '@vianova/oidc'
 
-const ALLOWED_SCOPES = ['service:entitlements:write', 'service:sessions:revoke'] as const
+const ALLOWED_SCOPES = ['service:entitlements:write', 'service:sessions:revoke', 'service:notifications:write'] as const
 
 // Emissão de token de serviço escopado (Vianova → produto). Autenticado pelo
 // segredo administrativo interno — nunca por JWT de usuário nem client secret

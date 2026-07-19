@@ -1,6 +1,7 @@
 import { db, sessions } from '@vianova/db'
 import { eq, and, gt } from 'drizzle-orm'
 import { generateId, generateToken, hashToken } from './crypto'
+import { introspectToken } from '@vianova/oidc'
 
 const SESSION_TTL_DAYS = 30
 
@@ -43,6 +44,16 @@ export async function validateSession(
   if (!session) return null
 
   return { userId: session.userId, sessionId: session.id }
+}
+
+// Valida um JWT de usuário (ex.: token emitido para produtos via /oidc/token)
+// e retorna uma sessão virtual se a sessão de origem ainda estiver ativa.
+export async function validateJwtSession(
+  jwt: string,
+): Promise<{ userId: string; sessionId: string } | null> {
+  const introspection = await introspectToken(jwt)
+  if (!introspection.active) return null
+  return { userId: introspection.sub, sessionId: introspection.sid }
 }
 
 export async function deleteSession(token: string): Promise<string | null> {
