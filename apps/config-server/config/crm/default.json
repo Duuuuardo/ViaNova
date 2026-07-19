@@ -1,0 +1,14 @@
+{
+  "app": {
+    "name": "Naia CRM",
+    "url": "https://crm.naia.website"
+  },
+  "email": {
+    "fromName": "Naia CRM",
+    "fromAddress": "noreply@crm.naia.website"
+  },
+  "limits": {
+    "freePlanAgents": 2,
+    "freePlanConversations": 200
+  }
+}

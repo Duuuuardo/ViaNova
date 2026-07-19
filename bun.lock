@@ -32,6 +32,21 @@
         "typescript": "^5",
       },
     },
+    "apps/config-server": {
+      "name": "@vianova/config-server",
+      "version": "0.0.1",
+      "dependencies": {
+        "@elysiajs/cors": "^1",
+        "elysia": "^1",
+        "logixlysia": "^6.6.0",
+      },
+      "devDependencies": {
+        "@vianova/config": "workspace:*",
+        "@vianova/oidc": "workspace:*",
+        "bun-types": "1.3.14",
+        "typescript": "5.9.3",
+      },
+    },
     "apps/email-worker": {
       "name": "@vianova/email-worker",
       "version": "0.0.1",
@@ -118,6 +133,14 @@
     "packages/config": {
       "name": "@vianova/config",
       "version": "0.0.1",
+    },
+    "packages/config-client": {
+      "name": "@vianova/config-client",
+      "version": "0.0.1",
+      "devDependencies": {
+        "bun-types": "1.3.14",
+        "typescript": "5.9.3",
+      },
     },
     "packages/db": {
       "name": "@vianova/db",
@@ -424,6 +447,10 @@
     "@vianova/client": ["@vianova/client@workspace:packages/client"],
 
     "@vianova/config": ["@vianova/config@workspace:packages/config"],
+
+    "@vianova/config-client": ["@vianova/config-client@workspace:packages/config-client"],
+
+    "@vianova/config-server": ["@vianova/config-server@workspace:apps/config-server"],
 
     "@vianova/db": ["@vianova/db@workspace:packages/db"],
 

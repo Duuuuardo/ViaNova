@@ -1,0 +1,15 @@
+{
+  "app": {
+    "name": "Vianova",
+    "url": "https://vianova.software"
+  },
+  "email": {
+    "fromName": "Vianova",
+    "fromAddress": "noreply@vianova.software"
+  },
+  "features": {
+    "organization": true,
+    "billing": true,
+    "avatars": true
+  }
+}

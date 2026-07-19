@@ -9,6 +9,7 @@ const ALLOWED_SCOPES = [
   'service:sessions:revoke',
   'service:notifications:write',
   'service:email:send',
+  'service:config:read',
 ] as const
 
 async function verifyServiceToken(

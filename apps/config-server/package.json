@@ -1,0 +1,23 @@
+{
+  "name": "@vianova/config-server",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot --env-file ../../.env src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun --env-file ../../.env dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1",
+    "elysia": "^1",
+    "logixlysia": "^6.6.0"
+  },
+  "devDependencies": {
+    "@vianova/config": "workspace:*",
+    "@vianova/oidc": "workspace:*",
+    "bun-types": "1.3.14",
+    "typescript": "5.9.3"
+  }
+}

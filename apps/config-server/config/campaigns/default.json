@@ -1,0 +1,14 @@
+{
+  "app": {
+    "name": "Naia Campaigns",
+    "url": "https://campaigns.naia.website"
+  },
+  "email": {
+    "fromName": "Naia Campaigns",
+    "fromAddress": "noreply@campaigns.naia.website"
+  },
+  "limits": {
+    "freePlanContacts": 100,
+    "freePlanCampaignsPerMonth": 5
+  }
+}

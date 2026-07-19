@@ -1,0 +1,14 @@
+{
+  "app": {
+    "name": "Naia",
+    "url": "https://naia.website"
+  },
+  "email": {
+    "fromName": "Naia",
+    "fromAddress": "noreply@naia.website"
+  },
+  "features": {
+    "campaigns": true,
+    "crm": false
+  }
+}

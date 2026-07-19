@@ -1,0 +1,8 @@
+{
+  "app": {
+    "url": "http://localhost:3301"
+  },
+  "email": {
+    "fromAddress": "dev-noreply@naia.website"
+  }
+}
