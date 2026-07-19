@@ -16,7 +16,7 @@
     "@elysiajs/cors": "^1",
     "@vianova/db": "workspace:*",
     "@vianova/oidc": "workspace:*",
-    "bullmq": "^5",
+    "bullmq": "5.80.2",
     "drizzle-orm": "^0.44",
     "elysia": "^1",
     "logixlysia": "^6.6.0",

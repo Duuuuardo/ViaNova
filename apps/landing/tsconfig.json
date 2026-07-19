@@ -1,5 +1,5 @@
 {
-  "extends": "@vianova/config/tsconfig/react.json",
+  "extends": "../../packages/config/tsconfig/react.json",
   "compilerOptions": {
     "rootDir": "app",
     "types": ["vite/client", "bun-types"],

@@ -1,9 +1,36 @@
 import { Elysia, t } from 'elysia'
 import { db, productCatalog } from '@vianova/db'
 import { eq } from 'drizzle-orm'
-import { signServiceToken } from '@vianova/oidc'
+import { signServiceToken, introspectToken } from '@vianova/oidc'
+import { enqueueEmail } from '../lib/email-queue'
 
-const ALLOWED_SCOPES = ['service:entitlements:write', 'service:sessions:revoke', 'service:notifications:write'] as const
+const ALLOWED_SCOPES = [
+  'service:entitlements:write',
+  'service:sessions:revoke',
+  'service:notifications:write',
+  'service:email:send',
+] as const
+
+async function verifyServiceToken(
+  authHeader: string | undefined,
+  requiredScope: string,
+): Promise<{ productSlug: string } | null> {
+  if (!authHeader) return null
+  const token = authHeader.replace(/^Bearer /, '')
+  const introspection = await introspectToken(token)
+  if (!introspection.active) return null
+  if (introspection.scope !== requiredScope) return null
+  const aud = introspection.aud
+  const productSlug = Array.isArray(aud) ? aud[0] : aud
+  if (!productSlug) return null
+  return { productSlug }
+}
+
+const INTERNAL_SECRET = process.env.VIANOVA_INTERNAL_SECRET ?? 'vianova-internal-secret'
+
+function verifyInternalSecret(headers: Headers): boolean {
+  return headers.get('x-internal-secret') === INTERNAL_SECRET
+}
 
 // Emissão de token de serviço escopado (Vianova → produto). Autenticado pelo
 // segredo administrativo interno — nunca por JWT de usuário nem client secret
@@ -46,6 +73,50 @@ export const internalRoutes = new Elysia({ prefix: '/internal' })
       body: t.Object({
         product_slug: t.String(),
         scope: t.String(),
+      }),
+    },
+  )
+
+  // Endpoint service-to-service: produtos enfileiram emails para a Vianova enviar.
+  // Aceita token de serviço com scope `service:email:send` ou o segredo interno
+  // compartilhado (`x-internal-secret`).
+  .post(
+    '/email/enqueue',
+    async ({ request, body, set }) => {
+      const authHeader = request.headers.get('authorization') ?? undefined
+      const service = await verifyServiceToken(authHeader, 'service:email:send')
+      const viaSecret = verifyInternalSecret(request.headers)
+      if (!service && !viaSecret) {
+        set.status = 401
+        return { message: 'Não autorizado.' }
+      }
+
+      await enqueueEmail({
+        type: 'email:send',
+        to: body.to,
+        subject: body.subject,
+        html: body.html,
+        brand: body.brand,
+        from: body.from,
+        replyTo: body.reply_to,
+        metadata: {
+          sourceProduct: service?.productSlug ?? body.product_slug ?? 'unknown',
+          sourceWorkspaceId: body.workspace_id,
+        },
+      })
+
+      return { enqueued: true as const }
+    },
+    {
+      body: t.Object({
+        to: t.String({ format: 'email' }),
+        subject: t.String(),
+        html: t.String(),
+        brand: t.Union([t.Literal('vianova'), t.Literal('naia'), t.Literal('crm')]),
+        from: t.Optional(t.String()),
+        reply_to: t.Optional(t.String()),
+        product_slug: t.Optional(t.String()),
+        workspace_id: t.Optional(t.String()),
       }),
     },
   )

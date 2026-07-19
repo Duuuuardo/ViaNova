@@ -1,5 +1,5 @@
 {
-  "extends": "@vianova/config/tsconfig/bun.json",
+  "extends": "../config/tsconfig/bun.json",
   "compilerOptions": {
     "rootDir": "src"
   },
