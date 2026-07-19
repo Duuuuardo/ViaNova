@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@elysiajs/cors": "^1",
+    "@elysiajs/swagger": "^1",
     "@vianova/db": "workspace:*",
     "@vianova/oidc": "workspace:*",
     "bullmq": "5.80.2",

@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
+import { swagger } from '@elysiajs/swagger'
 import logixlysia from 'logixlysia'
 import { errorSanitizerPlugin } from './plugins/error-sanitizer'
 import { authPlugin } from './plugins/auth'
@@ -23,6 +24,17 @@ const app = new Elysia()
           ? /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
           : (process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'),
       credentials: true,
+    }),
+  )
+  .use(
+    swagger({
+      documentation: {
+        info: {
+          title: 'Vianova API',
+          version: '0.0.1',
+          description: 'Account, identity, billing and OIDC provider for the NovaPlatform ecosystem.',
+        },
+      },
     }),
   )
   .use(
