@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "exports": {
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/bun.json": "./tsconfig/bun.json",
+    "./tsconfig/react.json": "./tsconfig/react.json",
     "./tailwind/base.css": "./tailwind/base.css"
   }
 }

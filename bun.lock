@@ -5,10 +5,10 @@
     "": {
       "name": "vianova",
       "devDependencies": {
-        "jose": "^6.2.3",
-        "puppeteer-core": "^25.3.0",
-        "turbo": "latest",
-        "typescript": "^5",
+        "jose": "6.2.3",
+        "puppeteer-core": "25.3.0",
+        "turbo": "2.10.5",
+        "typescript": "5.9.3",
       },
     },
     "apps/api": {
@@ -28,7 +28,7 @@
       },
       "devDependencies": {
         "@types/nodemailer": "^6",
-        "bun-types": "latest",
+        "bun-types": "1.3.14",
         "typescript": "^5",
       },
     },
@@ -51,7 +51,7 @@
         "@types/react-dom": "^19",
         "@vianova/config": "workspace:*",
         "@vitejs/plugin-react": "^6.0.3",
-        "bun-types": "latest",
+        "bun-types": "1.3.14",
         "tailwindcss": "^4",
         "typescript": "^5",
         "vite": "^8",
@@ -80,7 +80,7 @@
         "@types/react-dom": "^19",
         "@vianova/api": "workspace:*",
         "@vitejs/plugin-react": "^6.0.3",
-        "bun-types": "latest",
+        "bun-types": "1.3.14",
         "tailwindcss": "^4",
         "typescript": "^5",
         "vite": "^8",
@@ -96,7 +96,7 @@
       },
       "devDependencies": {
         "@vianova/api": "workspace:*",
-        "bun-types": "latest",
+        "bun-types": "1.3.14",
         "typescript": "^5",
       },
     },
@@ -112,7 +112,7 @@
         "postgres": "^3",
       },
       "devDependencies": {
-        "bun-types": "latest",
+        "bun-types": "1.3.14",
         "drizzle-kit": "^0.30",
         "typescript": "^5",
       },
@@ -126,7 +126,7 @@
         "jose": "^6",
       },
       "devDependencies": {
-        "bun-types": "latest",
+        "bun-types": "1.3.14",
         "typescript": "^5",
       },
     },

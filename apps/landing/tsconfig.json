@@ -1,10 +1,9 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "@vianova/config/tsconfig/react.json",
   "compilerOptions": {
-    "jsx": "react-jsx",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "rootDir": "app",
     "types": ["vite/client", "bun-types"],
-    "verbatimModuleSyntax": false,
     "paths": { "~/*": ["./app/*"] }
-  }
+  },
+  "include": ["app"]
 }

@@ -1,6 +1,7 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "@vianova/config/tsconfig/bun.json",
   "compilerOptions": {
-    "types": ["bun-types"]
-  }
+    "rootDir": "src"
+  },
+  "include": ["src"]
 }
