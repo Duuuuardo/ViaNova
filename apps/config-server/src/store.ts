@@ -6,7 +6,7 @@ export type ConfigMap = Record<string, ConfigValue>
 
 const CONFIG_DIR = process.env.CONFIG_DIR ?? path.resolve(import.meta.dir, '../config')
 
-function deepMerge(base: ConfigMap, override: ConfigMap): ConfigMap {
+export function deepMerge(base: ConfigMap, override: ConfigMap): ConfigMap {
   const result: ConfigMap = { ...base }
 
   for (const key of Object.keys(override)) {
