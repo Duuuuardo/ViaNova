@@ -1,0 +1,102 @@
+name: vianova-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vianova
+      POSTGRES_USER: vianova
+      POSTGRES_PASSWORD: ${VIANOVA_POSTGRES_PASSWORD}
+    volumes:
+      - vianova_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vianova -d vianova"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - vianova_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - vianova_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ${REGISTRY}/vianova-api:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000"
+    env_file:
+      - ./.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  web:
+    image: ${REGISTRY}/vianova-web:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - ./.env
+    depends_on:
+      - api
+
+  landing:
+    image: ${REGISTRY}/vianova-landing:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3300:3300"
+    env_file:
+      - ./.env
+
+  config-server:
+    image: ${REGISTRY}/vianova-config-server:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5100:5100"
+    env_file:
+      - ./.env
+    volumes:
+      - ./apps/config-server/config:/app/apps/config-server/config:ro
+    depends_on:
+      - api
+
+  email-worker:
+    image: ${REGISTRY}/vianova-email-worker:latest
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  vianova_postgres_data:
+  vianova_redis_data:
+  vianova_minio_data:
