@@ -1,22 +1,32 @@
 import { startEmailWorker, type EmailJob } from './queue'
 import { defaultFrom, sendEmail } from './sender'
+import { loadProductConfig } from './lib/config'
 
-console.log('[email-worker] iniciando...')
+async function bootstrap() {
+  await loadProductConfig()
 
-startEmailWorker(async (job) => {
-  const data = job.data
-  if (data.type !== 'email:send') {
-    console.warn(`[email-worker] tipo de job ignorado: ${data.type}`)
-    return
-  }
+  console.log('[email-worker] iniciando...')
 
-  await sendEmail({
-    from: data.from ?? defaultFrom(data.brand),
-    to: data.to,
-    subject: data.subject,
-    html: data.html,
-    replyTo: data.replyTo,
+  startEmailWorker(async (job) => {
+    const data = job.data
+    if (data.type !== 'email:send') {
+      console.warn(`[email-worker] tipo de job ignorado: ${data.type}`)
+      return
+    }
+
+    await sendEmail({
+      from: data.from ?? defaultFrom(data.brand),
+      to: data.to,
+      subject: data.subject,
+      html: data.html,
+      replyTo: data.replyTo,
+    })
+
+    console.log(`[email-worker] enviado: ${data.subject} → ${data.to}`)
   })
+}
 
-  console.log(`[email-worker] enviado: ${data.subject} → ${data.to}`)
+bootstrap().catch((err) => {
+  console.error('[email-worker] erro ao iniciar:', err)
+  process.exit(1)
 })

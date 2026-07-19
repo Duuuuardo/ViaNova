@@ -17,6 +17,7 @@
     "@tanstack/react-start": "^1",
     "@vianova/client": "workspace:*",
     "@vianova/config": "workspace:*",
+    "@vianova/config-client": "workspace:*",
     "lucide-react": "^1.24.0",
     "react": "^19",
     "react-dom": "^19",

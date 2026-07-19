@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@vianova/config-client": "workspace:*",
     "bullmq": "5.80.2",
     "ioredis": "5.10.1",
     "nodemailer": "6.10.1"
