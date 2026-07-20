@@ -1,9 +1,10 @@
-import { db, sessions } from '@vianova/db'
-import { eq, and, gt } from 'drizzle-orm'
+import { db, sessions, loginChallenges } from '@vianova/db'
+import { eq, and, gt, isNull } from 'drizzle-orm'
 import { generateId, generateToken, hashToken } from './crypto'
 import { introspectToken } from '@vianova/oidc'
 
 const SESSION_TTL_DAYS = 30
+const LOGIN_CHALLENGE_TTL_MINUTES = 5
 
 export const SESSION_COOKIE = 'vianova_session'
 
@@ -71,4 +72,54 @@ export async function deleteAllUserSessions(userId: string): Promise<string[]> {
     .where(eq(sessions.userId, userId))
     .returning({ id: sessions.id })
   return deleted.map((s) => s.id)
+}
+
+export async function createLoginChallenge(
+  userId: string,
+  ip?: string,
+  userAgent?: string,
+): Promise<{ token: string; challengeId: string }> {
+  const token = generateToken()
+  const tokenHash = hashToken(token)
+  const challengeId = generateId()
+  const expiresAt = new Date(Date.now() + LOGIN_CHALLENGE_TTL_MINUTES * 60 * 1000)
+
+  await db.insert(loginChallenges).values({
+    id: challengeId,
+    userId,
+    tokenHash,
+    ip: ip ?? null,
+    userAgent: userAgent ?? null,
+    expiresAt,
+  })
+
+  return { token, challengeId }
+}
+
+export async function validateLoginChallenge(
+  token: string,
+): Promise<{ userId: string; challengeId: string } | null> {
+  const tokenHash = hashToken(token)
+  const now = new Date()
+
+  const [challenge] = await db
+    .select()
+    .from(loginChallenges)
+    .where(
+      and(
+        eq(loginChallenges.tokenHash, tokenHash),
+        gt(loginChallenges.expiresAt, now),
+        isNull(loginChallenges.usedAt),
+      ),
+    )
+    .limit(1)
+
+  if (!challenge) return null
+
+  await db
+    .update(loginChallenges)
+    .set({ usedAt: now })
+    .where(eq(loginChallenges.id, challenge.id))
+
+  return { userId: challenge.userId, challengeId: challenge.id }
 }

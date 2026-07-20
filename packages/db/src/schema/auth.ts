@@ -37,7 +37,22 @@ export const totpSecrets = pgTable('totp_secrets', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
+// Token temporário usado no fluxo de 2FA: a senha é validada na primeira
+// requisição, mas a sessão só é criada após o TOTP. Evita armazenar
+// credenciais no sessionStorage do navegador.
+export const loginChallenges = pgTable('login_challenges', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  expiresAt: timestamp('expires_at').notNull(),
+  usedAt: timestamp('used_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
 export type Session = typeof sessions.$inferSelect
 export type EmailVerification = typeof emailVerifications.$inferSelect
 export type PasswordReset = typeof passwordResets.$inferSelect
 export type TotpSecret = typeof totpSecrets.$inferSelect
+export type LoginChallenge = typeof loginChallenges.$inferSelect

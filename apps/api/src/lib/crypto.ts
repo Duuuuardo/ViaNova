@@ -1,3 +1,6 @@
+import { createHmac } from 'node:crypto'
+import { getTokenHashSalt } from './env'
+
 export function generateId(): string {
   return crypto.randomUUID()
 }
@@ -9,9 +12,7 @@ export function generateToken(): string {
 }
 
 export function hashToken(token: string): string {
-  const hasher = new Bun.CryptoHasher('sha256')
-  hasher.update(token)
-  return hasher.digest('hex')
+  return createHmac('sha256', getTokenHashSalt()).update(token).digest('hex')
 }
 
 export function generateBackupCodes(): string[] {

@@ -3,7 +3,15 @@ import { eq, and, gt } from 'drizzle-orm'
 import { SignJWT, jwtVerify, createLocalJWKSet, type JWTPayload } from 'jose'
 import { getSigningKey, getJwks, ALG } from './keys'
 
-export const ISSUER = process.env.VIANOVA_API_URL ?? 'http://localhost:5000'
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value || value.trim().length === 0) {
+    throw new Error(`[oidc] ${name} is required`)
+  }
+  return value
+}
+
+export const ISSUER = requireEnv('VIANOVA_API_URL')
 
 const USER_TOKEN_TTL_SECONDS = 60 * 60 // 1h
 const SERVICE_TOKEN_TTL_SECONDS = 5 * 60 // 5min — escopado e de vida curta

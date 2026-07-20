@@ -14,7 +14,13 @@ async function getProduct(slug: string) {
   return product ?? null
 }
 
-async function postToProduct(apiUrl: string, path: string, scope: string, productSlug: string, body: unknown) {
+async function postToProduct<T = unknown>(
+  apiUrl: string,
+  path: string,
+  scope: string,
+  productSlug: string,
+  body: unknown,
+): Promise<{ ok: false; status: number; data?: unknown } | { ok: true; data: T }> {
   const { token } = await signServiceToken(productSlug, scope)
 
   let res: Response
@@ -27,12 +33,12 @@ async function postToProduct(apiUrl: string, path: string, scope: string, produc
       },
       body: JSON.stringify(body),
     })
-  } catch {
+  } catch (err) {
     // Milestone 1: nenhum produto expõe esses endpoints ainda — indisponível
     // não é erro fatal, só registra. Quando o produto existir, 5xx abaixo
     // aciona o retry da fila normalmente.
     console.warn(`[product-sync] ${productSlug} indisponível em ${apiUrl}${path} (stub M1)`)
-    return
+    return { ok: false, status: 503 }
   }
 
   // 4xx = o produto não implementa/reconhece o endpoint — retry não resolve.
@@ -41,8 +47,79 @@ async function postToProduct(apiUrl: string, path: string, scope: string, produc
     throw new Error(`[product-sync] ${productSlug}${path} respondeu ${res.status}`)
   }
   if (!res.ok) {
+    const text = await res.text().catch(() => '')
     console.warn(`[product-sync] ${productSlug}${path} respondeu ${res.status} — sem retry`)
+    return { ok: false, status: res.status, data: text }
   }
+
+  const data = (await res.json().catch(() => ({}))) as T
+  return { ok: true, data }
+}
+
+async function patchToProduct<T = unknown>(
+  apiUrl: string,
+  path: string,
+  scope: string,
+  productSlug: string,
+  body: unknown,
+): Promise<{ ok: false; status: number; data?: unknown } | { ok: true; data: T }> {
+  const { token } = await signServiceToken(productSlug, scope)
+
+  let res: Response
+  try {
+    res = await fetch(`${apiUrl}${path}`, {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    })
+  } catch (err) {
+    console.warn(`[product-sync] ${productSlug} indisponível em ${apiUrl}${path}:`, err)
+    return { ok: false, status: 503 }
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    return { ok: false, status: res.status, data: text }
+  }
+
+  const data = (await res.json().catch(() => ({}))) as T
+  return { ok: true, data }
+}
+
+export { patchToProduct, postToProduct }
+
+export async function getFromProduct<T = unknown>(
+  apiUrl: string,
+  path: string,
+  scope: string,
+  productSlug: string,
+): Promise<{ ok: false; status: number; data?: unknown } | { ok: true; data: T }> {
+  const { token } = await signServiceToken(productSlug, scope)
+
+  let res: Response
+  try {
+    res = await fetch(`${apiUrl}${path}`, {
+      method: 'GET',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+      },
+    })
+  } catch (err) {
+    console.warn(`[product-sync] ${productSlug} indisponível em ${apiUrl}${path}:`, err)
+    return { ok: false, status: 503 }
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    return { ok: false, status: res.status, data: text }
+  }
+
+  const data = (await res.json().catch(() => ({}))) as T
+  return { ok: true, data }
 }
 
 // Consolida plano + add-ons da assinatura de um workspace.

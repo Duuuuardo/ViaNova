@@ -25,7 +25,9 @@
   --color-line-strong: #c9ccd6;
 
   /* ─── Semânticas ──────────────────────────────────────────────────────── */
+  --color-ok-50: #eefdf5;
   --color-ok-600: #1a9a5b;
+  --color-ok-700: #147a47;
   --color-warn-600: #c77e14;
   --color-danger-600: #d64545;
   --color-danger-50: #fdf3f3;

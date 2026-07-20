@@ -1,10 +1,40 @@
 import { Elysia, t } from 'elysia'
 import { cors } from '@elysiajs/cors'
 import logixlysia from 'logixlysia'
+import { timingSafeEqual } from 'node:crypto'
 import { introspectToken } from '@vianova/oidc'
 import { configStore } from './store'
+import { rateLimit } from './rate-limit'
 
-const INTERNAL_SECRET = process.env.VIANOVA_INTERNAL_SECRET ?? 'vianova-internal-secret'
+function getRequiredEnv(name: string): string {
+  const value = process.env[name]
+  if (!value || value.trim().length === 0) {
+    console.error(`[config-server] Environment variable ${name} is required`)
+    process.exit(1)
+  }
+  return value
+}
+
+function getRequiredSecret(name: string): string {
+  const value = process.env[name]
+  if (!value || value.trim().length === 0) {
+    throw new Error(`Missing required secret: ${name}`)
+  }
+  if (value.length < 16) {
+    throw new Error(`Secret ${name} is too short (min 16 characters)`)
+  }
+  return value
+}
+
+function verifySecret(provided: string | undefined | null, expected: string): boolean {
+  if (!provided) return false
+  const providedBuf = Buffer.from(provided)
+  const expectedBuf = Buffer.from(expected)
+  if (providedBuf.length !== expectedBuf.length) return false
+  return timingSafeEqual(providedBuf, expectedBuf)
+}
+
+const INTERNAL_SECRET = getRequiredSecret('VIANOVA_INTERNAL_SECRET')
 
 async function verifyServiceToken(
   authHeader: string | undefined,
@@ -22,18 +52,44 @@ async function verifyServiceToken(
 }
 
 function verifyInternalSecret(headers: Headers): boolean {
-  return headers.get('x-internal-secret') === INTERNAL_SECRET
+  return verifySecret(headers.get('x-internal-secret'), INTERNAL_SECRET)
 }
 
 const ALLOWED_PRODUCTS = ['vianova', 'naia', 'campaigns', 'crm'] as const
 
+function getCorsOriginHandler(): string | string[] | RegExp | ((request: Request) => boolean) {
+  if (process.env.NODE_ENV !== 'production') {
+    const regex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
+    return (request: Request) => regex.test(request.headers.get('origin') ?? '')
+  }
+
+  const configured = process.env.CORS_ALLOWED_ORIGINS
+  if (configured) {
+    try {
+      const list = JSON.parse(configured) as string[]
+      if (!Array.isArray(list) || list.some((o) => typeof o !== 'string')) {
+        throw new Error('CORS_ALLOWED_ORIGINS must be a JSON array of strings')
+      }
+      return list
+    } catch {
+      console.error('[config-server] CORS_ALLOWED_ORIGINS is not a valid JSON array')
+      process.exit(1)
+    }
+  }
+
+  return [getRequiredEnv('VIANOVA_WEB_URL')]
+}
+
+const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000)
+// Limite generoso para não atrapalhar produtos que fazem muitas chamadas
+// de config ao iniciar. Ajustável via env.
+const rateLimitMax = Number(process.env.RATE_LIMIT_MAX ?? 1_000)
+
 const app = new Elysia()
+  .use(rateLimit({ windowMs: rateLimitWindowMs, max: rateLimitMax }))
   .use(
     cors({
-      origin:
-        process.env.NODE_ENV !== 'production'
-          ? /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
-          : (process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'),
+      origin: getCorsOriginHandler(),
       credentials: true,
     }),
   )

@@ -20,13 +20,15 @@ import {
   validateWorkspaceFile,
 } from '../lib/file-validation'
 import { authPlugin } from '../plugins/auth'
+import { requireEnv } from '../lib/env'
+import { getRequiredSecret, verifySecret } from '../lib/secrets'
 
-const API_URL = process.env.VIANOVA_API_URL ?? 'http://localhost:5000'
-const INTERNAL_SECRET = process.env.VIANOVA_INTERNAL_SECRET ?? 'vianova-internal-secret'
+const API_URL = requireEnv('VIANOVA_API_URL')
+const INTERNAL_SECRET = getRequiredSecret('VIANOVA_INTERNAL_SECRET')
 
 // Validação mínima para rotas internas chamadas pelos produtos.
 function verifyInternalSecret(headers: Record<string, string | undefined>) {
-  return headers['x-internal-secret'] === INTERNAL_SECRET
+  return verifySecret(headers['x-internal-secret'], INTERNAL_SECRET)
 }
 
 // Verifica se o usuário logado pode gerenciar o workspace no Vianova.
@@ -269,7 +271,7 @@ export const filesRoutes = new Elysia()
 
   .delete(
     '/internal/files/:id',
-    async ({ request, params, set }) => {
+    async ({ request, params, query, set }) => {
       const headers: Record<string, string | undefined> = Object.fromEntries(request.headers.entries())
       if (!verifyInternalSecret(headers)) {
         set.status = 401
@@ -282,7 +284,7 @@ export const filesRoutes = new Elysia()
         .where(eq(workspaceFiles.id, params.id))
         .limit(1)
 
-      if (!file) {
+      if (!file || file.productSlug !== query.product_slug || file.workspaceId !== query.workspace_id) {
         set.status = 404
         return { message: 'Arquivo não encontrado.' }
       }
@@ -299,12 +301,13 @@ export const filesRoutes = new Elysia()
     },
     {
       params: t.Object({ id: t.String() }),
+      query: t.Object({ product_slug: t.String(), workspace_id: t.String() }),
     },
   )
 
   .post(
     '/internal/files/:id/restore',
-    async ({ request, params, set }) => {
+    async ({ request, params, query, set }) => {
       const headers: Record<string, string | undefined> = Object.fromEntries(request.headers.entries())
       if (!verifyInternalSecret(headers)) {
         set.status = 401
@@ -317,7 +320,7 @@ export const filesRoutes = new Elysia()
         .where(eq(workspaceFiles.id, params.id))
         .limit(1)
 
-      if (!file) {
+      if (!file || file.productSlug !== query.product_slug || file.workspaceId !== query.workspace_id) {
         set.status = 404
         return { message: 'Arquivo não encontrado.' }
       }
@@ -341,6 +344,7 @@ export const filesRoutes = new Elysia()
     },
     {
       params: t.Object({ id: t.String() }),
+      query: t.Object({ product_slug: t.String(), workspace_id: t.String() }),
     },
   )
 

@@ -22,9 +22,8 @@ function TwoFactorPage() {
     e.preventDefault()
     setError(null)
 
-    const email = sessionStorage.getItem('2fa_email')
-    const password = sessionStorage.getItem('2fa_password')
-    if (!email || !password) {
+    const challengeToken = sessionStorage.getItem('2fa_challenge_token')
+    if (!challengeToken) {
       router.navigate({ to: '/login', search: { redirect_uri } })
       return
     }
@@ -32,8 +31,7 @@ function TwoFactorPage() {
     setLoading(true)
     try {
       const { data, error: apiError } = await api.auth.login.post({
-        email,
-        password,
+        challengeToken,
         totpCode: code,
       })
 
@@ -42,8 +40,7 @@ function TwoFactorPage() {
         return
       }
 
-      sessionStorage.removeItem('2fa_email')
-      sessionStorage.removeItem('2fa_password')
+      sessionStorage.removeItem('2fa_challenge_token')
 
       const oidcRedirect = safeOidcRedirect(redirect_uri)
       if (oidcRedirect) {

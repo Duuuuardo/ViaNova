@@ -5,6 +5,7 @@ import { authPlugin } from '../plugins/auth'
 import { createNotification, notifyUser, type NotificationType } from '../lib/notifications'
 import { sendProductNotificationEmail } from '../lib/email'
 import { introspectToken } from '@vianova/oidc'
+import { getRequiredSecret, verifySecret } from '../lib/secrets'
 
 const PAGE_SIZE = 50
 
@@ -23,10 +24,10 @@ async function verifyServiceToken(
   return { productSlug }
 }
 
-const INTERNAL_SECRET = process.env.VIANOVA_INTERNAL_SECRET ?? 'vianova-internal-secret'
+const INTERNAL_SECRET = getRequiredSecret('VIANOVA_INTERNAL_SECRET')
 
 function verifyInternalSecret(headers: Headers): boolean {
-  return headers.get('x-internal-secret') === INTERNAL_SECRET
+  return verifySecret(headers.get('x-internal-secret'), INTERNAL_SECRET)
 }
 
 export const notificationRoutes = new Elysia()

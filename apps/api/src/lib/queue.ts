@@ -4,6 +4,7 @@ import { db, workspaceFiles } from '@vianova/db'
 import { syncEntitlements, notifySessionRevoked, grantCredits, resetCredits } from './product-sync'
 import { deleteWorkspaceFile } from './storage'
 import { sendRenewalReminders } from './billing-reminders'
+import { requireEnv } from './env'
 
 // Trabalho assíncrono (sync de entitlements, revogação de sessão nos produtos)
 // nunca roda síncrono numa resposta HTTP — sempre via fila.
@@ -49,7 +50,7 @@ export type VianovaJob = EntitlementsSyncJob | SessionRevokedJob | CreditsGrantJ
 let queue: Queue | null = null
 
 function getConnection() {
-  const url = new URL(process.env.VIANOVA_REDIS_URL ?? 'redis://localhost:6380')
+  const url = new URL(requireEnv('VIANOVA_REDIS_URL'))
   return {
     host: url.hostname,
     port: Number(url.port || 6379),

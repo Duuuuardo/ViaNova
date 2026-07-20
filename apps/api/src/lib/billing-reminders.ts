@@ -2,8 +2,9 @@ import { and, eq, gte, lte, sql, not } from 'drizzle-orm'
 import { db, productSubscriptions, productPlans, productCatalog, notifications, users } from '@vianova/db'
 import { sendUpcomingRenewalEmail } from './email'
 import { notifyUser } from './notifications'
+import { requireEnv } from './env'
 
-const WEB_URL = process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'
+const WEB_URL = requireEnv('VIANOVA_WEB_URL')
 
 function daysFromNow(days: number): Date {
   const d = new Date()

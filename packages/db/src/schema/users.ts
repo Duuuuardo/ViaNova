@@ -34,6 +34,7 @@ export const users = pgTable('users', {
   twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
   scheduledForDeletionAt: timestamp('scheduled_for_deletion_at'),
   status: text('status').notNull().default('active'),
+  role: text('role').$type<'user' | 'admin' | 'superadmin'>().notNull().default('user'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })

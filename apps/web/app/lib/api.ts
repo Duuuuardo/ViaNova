@@ -1,9 +1,10 @@
 import { createVianovaClient } from '@vianova/client'
+import { requireEnv } from './env'
 
 const baseUrl =
   typeof window !== 'undefined'
-    ? (import.meta.env.VITE_VIANOVA_API_URL ?? 'http://localhost:5000')
-    : (process.env.VIANOVA_API_URL ?? 'http://localhost:5000')
+    ? requireEnv('VITE_VIANOVA_API_URL')
+    : requireEnv('VIANOVA_API_URL')
 
 export const api = createVianovaClient(baseUrl)
 

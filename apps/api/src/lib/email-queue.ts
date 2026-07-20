@@ -1,4 +1,5 @@
 import { Queue } from 'bullmq'
+import { requireEnv } from './env'
 
 export interface EmailEnqueueJob {
   type: 'email:send'
@@ -17,7 +18,7 @@ export interface EmailEnqueueJob {
 const EMAIL_QUEUE_NAME = 'vianova-email'
 
 function getConnection() {
-  const url = new URL(process.env.VIANOVA_REDIS_URL ?? 'redis://localhost:6380')
+  const url = new URL(requireEnv('VIANOVA_REDIS_URL'))
   return {
     host: url.hostname,
     port: Number(url.port || 6379),

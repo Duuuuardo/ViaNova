@@ -22,7 +22,7 @@ async function bootstrap() {
       replyTo: data.replyTo,
     })
 
-    console.log(`[email-worker] enviado: ${data.subject} → ${data.to}`)
+    console.log(`[email-worker] enviado: ${data.subject}`)
   })
 }
 

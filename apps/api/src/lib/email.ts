@@ -78,8 +78,8 @@ function baseTemplate(
 async function send(to: string, subject: string, html: string, ctaUrl: string, label: string) {
   const transporter = getTransporter()
   if (!transporter) {
-    // Dev sem SMTP: loga o link para o fluxo continuar testável.
-    console.log(`[email:dev] ${label} → ${to}: ${ctaUrl}`)
+    // Dev sem SMTP: loga só metadata para não vazar tokens de uso único.
+    console.log(`[email:dev] ${label}`)
     return
   }
   try {
@@ -102,7 +102,10 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
-const BILLING_URL = () => `${process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'}/billing`
+import { requireEnv } from './env'
+
+const WEB_URL = requireEnv('VIANOVA_WEB_URL')
+const BILLING_URL = () => `${WEB_URL}/billing`
 
 export async function sendSubscriptionConfirmedEmail(
   to: string,
@@ -240,7 +243,7 @@ export async function sendSecurityAlertEmail(
     <h2 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#1C1B2E;">${title}</h2>
     <p style="margin:0 0 20px;font-size:14px;color:#4b5563;line-height:1.6;">Olá, ${name}! ${description}</p>
   `
-  const url = actionUrl ?? `${process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'}/security`
+  const url = actionUrl ?? `${WEB_URL}/security`
   const label = actionLabel ?? 'Ver segurança da conta'
   await send(to, title, baseTemplate(title, body, url, label), url, 'sendSecurityAlertEmail')
 }
@@ -259,7 +262,7 @@ export async function sendProductNotificationEmail(
     <h2 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#1C1B2E;">${title}</h2>
     <p style="margin:0 0 20px;font-size:14px;color:#4b5563;line-height:1.6;">Olá, ${name}! ${description}</p>
   `
-  const url = actionUrl ?? `${process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'}/notifications`
+  const url = actionUrl ?? `${WEB_URL}/notifications`
   const label = actionLabel ?? 'Ver notificações'
   const subject = productName ? `${productName}: ${title}` : title
   const html = baseTemplate(title, body, url, label, brand)

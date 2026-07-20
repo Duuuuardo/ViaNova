@@ -7,9 +7,17 @@
 
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
-const VIANOVA_API = process.env.VIANOVA_API_URL ?? 'http://localhost:5000'
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value || value.trim().length === 0) {
+    throw new Error(`[mock-oidc-client] ${name} is required`)
+  }
+  return value
+}
+
+const VIANOVA_API = requireEnv('VIANOVA_API_URL')
 const CLIENT_ID = 'naia'
-const CLIENT_SECRET = process.env.NAIA_OIDC_CLIENT_SECRET ?? 'naia-dev-secret'
+const CLIENT_SECRET = requireEnv('NAIA_OIDC_CLIENT_SECRET')
 const PORT = 9999
 const REDIRECT_URI = `http://localhost:${PORT}/callback`
 

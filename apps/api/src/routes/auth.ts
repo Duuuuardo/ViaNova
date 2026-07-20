@@ -2,14 +2,15 @@ import { Elysia, t } from 'elysia'
 import { db, users, emailVerifications, passwordResets, totpSecrets, sessions } from '@vianova/db'
 import { eq, and, gt, isNull, ne } from 'drizzle-orm'
 import { generateId, generateToken, hashToken, generateBackupCodes } from '../lib/crypto'
-import { createSession, deleteSession, deleteAllUserSessions, SESSION_COOKIE } from '../lib/session'
+import { createSession, deleteSession, deleteAllUserSessions, SESSION_COOKIE, createLoginChallenge, validateLoginChallenge } from '../lib/session'
 import { sendVerificationEmail, sendPasswordResetEmail, sendSecurityAlertEmail } from '../lib/email'
 import { generateTotpSecret, getTotpUri, verifyTotp } from '../lib/totp'
 import { enqueue } from '../lib/queue'
 import { notifyUser } from '../lib/notifications'
 import { authPlugin } from '../plugins/auth'
+import { getCookieOptions, requireEnv } from '../lib/env'
 
-const WEB_URL = process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'
+const WEB_URL = requireEnv('VIANOVA_WEB_URL')
 
 async function securityNotify(
   userId: string,
@@ -90,9 +91,7 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 
       cookie[SESSION_COOKIE].set({
         value: sessionToken,
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
+        ...getCookieOptions(),
         maxAge: 60 * 60 * 24 * 30,
       })
 
@@ -119,34 +118,72 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
   .post(
     '/login',
     async ({ body, set, cookie, request }) => {
-      const { email, password, totpCode } = body
+      const { email, password, totpCode, challengeToken } = body
+      const ip = request.headers.get('x-forwarded-for') ?? undefined
+      const userAgent = request.headers.get('user-agent') ?? undefined
 
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, email.toLowerCase()))
-        .limit(1)
+      let userId: string
+      let userPasswordHash: string | null
+      let userTwoFactorEnabled: boolean
 
-      if (!user || !user.passwordHash) {
-        set.status = 401
-        return { message: 'Credenciais inválidas.' }
+      if (challengeToken) {
+        const challenge = await validateLoginChallenge(challengeToken)
+        if (!challenge) {
+          set.status = 401
+          return { message: 'Sessão de verificação expirada. Faça login novamente.' }
+        }
+        userId = challenge.userId
+
+        const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+        if (!user) {
+          set.status = 401
+          return { message: 'Sessão de verificação inválida.' }
+        }
+        userPasswordHash = user.passwordHash
+        userTwoFactorEnabled = user.twoFactorEnabled
+      } else {
+        if (!email || !password) {
+          set.status = 400
+          return { message: 'Email e senha são obrigatórios.' }
+        }
+
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, email.toLowerCase()))
+          .limit(1)
+
+        if (!user || !user.passwordHash) {
+          set.status = 401
+          return { message: 'Credenciais inválidas.' }
+        }
+
+        const valid = await Bun.password.verify(password, user.passwordHash)
+        if (!valid) {
+          set.status = 401
+          return { message: 'Credenciais inválidas.' }
+        }
+
+        userId = user.id
+        userPasswordHash = user.passwordHash
+        userTwoFactorEnabled = user.twoFactorEnabled
+
+        if (user.twoFactorEnabled) {
+          const { token: challengeToken } = await createLoginChallenge(user.id, ip, userAgent)
+          return { requires2FA: true as const, challengeToken }
+        }
       }
 
-      const valid = await Bun.password.verify(password, user.passwordHash)
-      if (!valid) {
-        set.status = 401
-        return { message: 'Credenciais inválidas.' }
-      }
-
-      if (user.twoFactorEnabled) {
+      if (userTwoFactorEnabled) {
         if (!totpCode) {
-          return { requires2FA: true as const }
+          set.status = 400
+          return { message: 'Código de verificação em duas etapas é obrigatório.' }
         }
 
         const [totpRow] = await db
           .select()
           .from(totpSecrets)
-          .where(eq(totpSecrets.userId, user.id))
+          .where(eq(totpSecrets.userId, userId))
           .limit(1)
 
         if (!totpRow || !totpRow.verifiedAt) {
@@ -171,25 +208,23 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
           await db
             .update(totpSecrets)
             .set({ backupCodes: updatedCodes })
-            .where(eq(totpSecrets.userId, user.id))
+            .where(eq(totpSecrets.userId, userId))
         }
       }
 
-      const ip = request.headers.get('x-forwarded-for') ?? undefined
-      const userAgent = request.headers.get('user-agent') ?? undefined
-      const { token } = await createSession(user.id, ip, userAgent)
+      const { token } = await createSession(userId, ip, userAgent)
 
       cookie[SESSION_COOKIE].set({
         value: token,
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
+        ...getCookieOptions(),
         maxAge: 60 * 60 * 24 * 30,
       })
 
+      const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+
       // Notifica o usuário sobre o novo acesso, mas não bloqueia o login.
       securityNotify(
-        user.id,
+        userId,
         'Novo acesso à sua conta',
         `Detectamos um novo login no seu endereço ${ip ?? 'desconhecido'}. Se não foi você, altere sua senha imediatamente.`,
         { ip, userAgent },
@@ -197,20 +232,21 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 
       return {
         user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          avatarUrl: user.avatarUrl,
-          avatarFrame: user.avatarFrame,
-          twoFactorEnabled: user.twoFactorEnabled,
+          id: userId,
+          name: user?.name ?? '',
+          email: user?.email ?? '',
+          avatarUrl: user?.avatarUrl ?? null,
+          avatarFrame: user?.avatarFrame ?? 'none',
+          twoFactorEnabled: userTwoFactorEnabled,
         },
       }
     },
     {
       body: t.Object({
-        email: t.String({ format: 'email' }),
-        password: t.String(),
+        email: t.Optional(t.String({ format: 'email' })),
+        password: t.Optional(t.String()),
         totpCode: t.Optional(t.String()),
+        challengeToken: t.Optional(t.String()),
       }),
     },
   )
@@ -263,6 +299,7 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         emailVerifiedAt: users.emailVerifiedAt,
         scheduledForDeletionAt: users.scheduledForDeletionAt,
         status: users.status,
+        role: users.role,
         createdAt: users.createdAt,
       })
       .from(users)

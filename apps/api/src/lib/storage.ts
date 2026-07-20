@@ -1,19 +1,20 @@
 import { S3Client } from 'bun'
+import { requireEnv } from './env'
 
-const S3_ENDPOINT = process.env.VIANOVA_S3_ENDPOINT ?? 'http://localhost:9100'
-const S3_ACCESS_KEY = process.env.VIANOVA_S3_ACCESS_KEY ?? 'vianova'
-const S3_SECRET_KEY = process.env.VIANOVA_S3_SECRET_KEY ?? 'vianova_secret'
+const S3_ENDPOINT = requireEnv('VIANOVA_S3_ENDPOINT')
+const S3_ACCESS_KEY = requireEnv('VIANOVA_S3_ACCESS_KEY')
+const S3_SECRET_KEY = requireEnv('VIANOVA_S3_SECRET_KEY')
 
 // Bucket exclusivo para avatares de conta. Nunca misturar com workspace files.
 const avatarsS3 = new S3Client({
   endpoint: S3_ENDPOINT,
   accessKeyId: S3_ACCESS_KEY,
   secretAccessKey: S3_SECRET_KEY,
-  bucket: process.env.VIANOVA_AVATARS_BUCKET ?? 'vianova-avatars',
+  bucket: requireEnv('VIANOVA_AVATARS_BUCKET'),
 })
 
 // Bucket para arquivos de workspaces de produto (Vianova Storage).
-export const WORKSPACE_FILES_BUCKET = process.env.VIANOVA_FILES_BUCKET ?? 'vianova-files'
+export const WORKSPACE_FILES_BUCKET = requireEnv('VIANOVA_FILES_BUCKET')
 const filesS3 = new S3Client({
   endpoint: S3_ENDPOINT,
   accessKeyId: S3_ACCESS_KEY,

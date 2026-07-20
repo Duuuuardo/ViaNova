@@ -1,6 +1,14 @@
 import { Queue, Worker, type Job } from 'bullmq'
 import IORedis from 'ioredis'
 
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value || value.trim().length === 0) {
+    throw new Error(`[email-worker] ${name} is required`)
+  }
+  return value
+}
+
 export const EMAIL_QUEUE_NAME = 'vianova-email'
 
 export interface EmailJob {
@@ -18,7 +26,7 @@ export interface EmailJob {
 }
 
 function getConnection() {
-  const url = new URL(process.env.VIANOVA_REDIS_URL ?? 'redis://localhost:6380')
+  const url = new URL(requireEnv('VIANOVA_REDIS_URL'))
   return {
     host: url.hostname,
     port: Number(url.port || 6379),

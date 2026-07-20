@@ -5,6 +5,6 @@ export default defineConfig({
   schema: './src/schema/index.ts',
   out: './drizzle',
   dbCredentials: {
-    url: process.env.VIANOVA_DATABASE_URL ?? 'postgres://vianova:vianova_secret@localhost:5434/vianova',
+    url: process.env.VIANOVA_DATABASE_URL,
   },
 })

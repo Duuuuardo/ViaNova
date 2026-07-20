@@ -1,14 +1,22 @@
+import { createHmac } from 'node:crypto'
 import { db } from './index'
 import { productCatalog, productPlans, productAddonTypes } from './schema'
 
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value || value.trim().length === 0) {
+    console.error(`[seed] Environment variable ${name} is required`)
+    process.exit(1)
+  }
+  return value
+}
+
 function hashSecret(secret: string): string {
-  const hasher = new Bun.CryptoHasher('sha256')
-  hasher.update(secret)
-  return hasher.digest('hex')
+  return createHmac('sha256', requireEnv('TOKEN_HASH_SALT')).update(secret).digest('hex')
 }
 
 // Secret OIDC de dev do produto naia — em produção, gerar e distribuir fora do seed.
-const NAIA_DEV_CLIENT_SECRET = process.env.NAIA_OIDC_CLIENT_SECRET ?? 'naia-dev-secret'
+const NAIA_DEV_CLIENT_SECRET = requireEnv('NAIA_OIDC_CLIENT_SECRET')
 
 async function seed() {
   await db
@@ -19,8 +27,8 @@ async function seed() {
       domain: 'naia.website',
       description: 'Campanhas — disparo de mensagens em massa via Telegram e WhatsApp.',
       icon: 'naia',
-      webUrl: process.env.NAIA_WEB_URL ?? 'http://localhost:3001',
-      apiUrl: process.env.NAIA_API_URL ?? 'http://localhost:4001',
+      webUrl: requireEnv('NAIA_WEB_URL'),
+      apiUrl: requireEnv('NAIA_API_URL'),
       oidcClientSecretHash: hashSecret(NAIA_DEV_CLIENT_SECRET),
       redirectUris: [
         'http://localhost:3001/auth/callback',

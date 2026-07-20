@@ -19,12 +19,13 @@ import {
   Zap,
 } from 'lucide-react'
 import { VianovaLogo, VianovaMark } from '~/components/logo'
+import { requireEnv } from '../lib/env'
 
 export const Route = createFileRoute('/')({
   component: Landing,
 })
 
-const ACCOUNT_URL = import.meta.env.VITE_VIANOVA_WEB_URL ?? 'https://vianova.software'
+const ACCOUNT_URL = requireEnv('VITE_VIANOVA_WEB_URL')
 const CAMPAIGNS_URL = 'https://campaigns.naia.website'
 
 function Landing() {

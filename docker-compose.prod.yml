@@ -3,6 +3,11 @@ name: vianova-prod
 networks:
   novaplatform:
     external: true
+  # Rede interna isolada: banco, Redis e MinIO só são alcançáveis pelos
+  # serviços do Vianova que se conectam explicitamente a ela.
+  vianova-internal:
+    driver: bridge
+    internal: true
 
 services:
   postgres:
@@ -19,20 +24,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - vianova-internal
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${VIANOVA_REDIS_PASSWORD}"]
     volumes:
       - vianova_redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${VIANOVA_REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - vianova-internal
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-07-17T22-54-18Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -45,6 +55,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - vianova-internal
 
   api:
     image: ${REGISTRY}/vianova-api:latest
@@ -52,10 +64,10 @@ services:
     ports:
       - "127.0.0.1:5000:5000"
     networks:
-      default: {}
       novaplatform:
         aliases:
           - vianova-api
+      vianova-internal:
     env_file:
       - ./.env
     depends_on:
@@ -72,7 +84,6 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     networks:
-      default: {}
       novaplatform:
         aliases:
           - vianova-web
@@ -87,23 +98,24 @@ services:
     ports:
       - "127.0.0.1:3300:3300"
     networks:
-      default: {}
       novaplatform:
         aliases:
           - vianova-landing
     env_file:
       - ./.env
 
+  # Config server: em produção fica apenas na rede interna e no loopback.
+  # NUNCA adicione um server_name/config.vianova.software público para ele.
   config-server:
     image: ${REGISTRY}/vianova-config-server:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:5100:5100"
     networks:
-      default: {}
       novaplatform:
         aliases:
           - vianova-config-server
+      vianova-internal:
     env_file:
       - ./.env
     volumes:
@@ -116,6 +128,8 @@ services:
     restart: unless-stopped
     env_file:
       - ./.env
+    networks:
+      - vianova-internal
     depends_on:
       redis:
         condition: service_healthy

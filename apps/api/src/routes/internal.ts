@@ -1,8 +1,9 @@
 import { Elysia, t } from 'elysia'
-import { db, productCatalog } from '@vianova/db'
-import { eq } from 'drizzle-orm'
+import { db, productCatalog, featureFlags } from '@vianova/db'
+import { eq, and, or } from 'drizzle-orm'
 import { signServiceToken, introspectToken } from '@vianova/oidc'
 import { enqueueEmail } from '../lib/email-queue'
+import { getRequiredSecret, verifySecret } from '../lib/secrets'
 
 const ALLOWED_SCOPES = [
   'service:entitlements:write',
@@ -10,6 +11,7 @@ const ALLOWED_SCOPES = [
   'service:notifications:write',
   'service:email:send',
   'service:config:read',
+  'service:feature-flags:read',
 ] as const
 
 async function verifyServiceToken(
@@ -27,10 +29,10 @@ async function verifyServiceToken(
   return { productSlug }
 }
 
-const INTERNAL_SECRET = process.env.VIANOVA_INTERNAL_SECRET ?? 'vianova-internal-secret'
+const INTERNAL_SECRET = getRequiredSecret('VIANOVA_INTERNAL_SECRET')
 
 function verifyInternalSecret(headers: Headers): boolean {
-  return headers.get('x-internal-secret') === INTERNAL_SECRET
+  return verifySecret(headers.get('x-internal-secret'), INTERNAL_SECRET)
 }
 
 // Emissão de token de serviço escopado (Vianova → produto). Autenticado pelo
@@ -42,10 +44,10 @@ export const internalRoutes = new Elysia({ prefix: '/internal' })
   .post(
     '/service-token',
     async ({ body, headers, set }) => {
-      const adminSecret = process.env.INTERNAL_ADMIN_SECRET
+      const adminSecret = getRequiredSecret('INTERNAL_ADMIN_SECRET')
       const provided = headers.authorization?.replace(/^Bearer /, '')
 
-      if (!adminSecret || provided !== adminSecret) {
+      if (!verifySecret(provided, adminSecret)) {
         set.status = 401
         return { message: 'Não autorizado.' }
       }
@@ -118,6 +120,45 @@ export const internalRoutes = new Elysia({ prefix: '/internal' })
         reply_to: t.Optional(t.String()),
         product_slug: t.Optional(t.String()),
         workspace_id: t.Optional(t.String()),
+      }),
+    },
+  )
+
+  // Feature flags ativas para produtos. Cacheável por produto.
+  .get(
+    '/feature-flags',
+    async ({ request, query, set }) => {
+      const authHeader = request.headers.get('authorization') ?? undefined
+      const service = await verifyServiceToken(authHeader, 'service:feature-flags:read')
+      const viaSecret = verifyInternalSecret(request.headers)
+      if (!service && !viaSecret) {
+        set.status = 401
+        return { message: 'Não autorizado.' }
+      }
+
+      const productSlug = service?.productSlug ?? query.product_slug ?? 'global'
+      const flags = await db
+        .select({
+          key: featureFlags.key,
+          scope: featureFlags.scope,
+          value: featureFlags.value,
+        })
+        .from(featureFlags)
+        .where(
+          and(
+            eq(featureFlags.enabled, true),
+            or(eq(featureFlags.scope, 'global'), eq(featureFlags.scope, `product:${productSlug}`)),
+          ),
+        )
+
+      return {
+        product_slug: productSlug,
+        flags: Object.fromEntries(flags.map((f) => [f.key, f.value])),
+      }
+    },
+    {
+      query: t.Object({
+        product_slug: t.Optional(t.String()),
       }),
     },
   )

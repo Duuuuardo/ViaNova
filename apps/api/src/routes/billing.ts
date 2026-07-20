@@ -28,8 +28,10 @@ import {
 } from '../lib/email'
 import { notifyUser } from '../lib/notifications'
 import { authPlugin } from '../plugins/auth'
+import { getRequiredSecret, getOptionalSecret, verifySecret } from '../lib/secrets'
+import { requireEnv } from '../lib/env'
 
-const WEB_URL = process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'
+const WEB_URL = requireEnv('VIANOVA_WEB_URL')
 
 const ACTIVE_STRIPE_STATUSES = ['active', 'trialing', 'past_due']
 
@@ -37,10 +39,10 @@ function hasActiveStripeSubscription(row: ProductSubscription): boolean {
   return Boolean(row.stripeSubscriptionId) && ACTIVE_STRIPE_STATUSES.includes(row.status)
 }
 
-const INTERNAL_SECRET = process.env.VIANOVA_INTERNAL_SECRET ?? 'vianova-internal-secret'
+const INTERNAL_SECRET = getRequiredSecret('VIANOVA_INTERNAL_SECRET')
 
 function verifyInternalSecret(headers: Record<string, string | undefined>) {
-  return headers['x-internal-secret'] === INTERNAL_SECRET
+  return verifySecret(headers['x-internal-secret'], INTERNAL_SECRET)
 }
 
 // Garante uma subscription free para um workspace de produto. Chamada
@@ -308,7 +310,10 @@ async function loadSubscriptionsWithDetails(subIds: string[]) {
       let usage: Record<string, number> | null = null
       if (row.product.apiUrl) {
         try {
-          const secret = process.env.NAIA_INTERNAL_SECRET ?? 'naia-internal-secret'
+          const secret = getOptionalSecret('NAIA_INTERNAL_SECRET')
+          if (!secret) {
+            console.warn('[billing:usage] NAIA_INTERNAL_SECRET not set; skipping usage fetch')
+          } else {
           const res = await fetch(`${row.product.apiUrl}/internal/usage/${row.subscription.workspaceId}`, {
             headers: {
               'x-internal-secret': secret,
@@ -318,6 +323,7 @@ async function loadSubscriptionsWithDetails(subIds: string[]) {
           if (res.ok) {
             const data = (await res.json()) as { usage?: Record<string, number> }
             if (data?.usage) usage = data.usage
+          }
           }
         } catch {
           // Fallback silencioso se o serviço estiver offline
@@ -394,6 +400,29 @@ export const billingRoutes = new Elysia()
         .limit(1)
 
       if (!row) return { subscription: null }
+
+      // IDOR: só expõe a assinatura para o dono do workspace ou membros da
+      // organização vinculada. Qualquer outro usuário recebe 404 (não revela
+      // existência do recurso).
+      let isMemberOfOrg = false
+      if (row.organizationId) {
+        const [membership] = await db
+          .select()
+          .from(organizationMembers)
+          .where(
+            and(
+              eq(organizationMembers.organizationId, row.organizationId),
+              eq(organizationMembers.userId, session.userId),
+            ),
+          )
+          .limit(1)
+        isMemberOfOrg = Boolean(membership)
+      }
+
+      if (row.ownerUserId !== session.userId && !isMemberOfOrg) {
+        set.status = 404
+        return { subscription: null }
+      }
 
       const [plan] = row.planId
         ? await db.select().from(productPlans).where(eq(productPlans.id, row.planId)).limit(1)
@@ -480,7 +509,7 @@ export const billingRoutes = new Elysia()
         }
       }
 
-      let [subRow] = await db
+      const [subRow] = await db
         .select()
         .from(productSubscriptions)
         .where(
@@ -491,34 +520,28 @@ export const billingRoutes = new Elysia()
         )
         .limit(1)
 
-      if (subRow && subRow.ownerUserId && subRow.ownerUserId !== session.userId) {
-        set.status = 403
-        return { message: 'Apenas o dono do workspace pode gerenciar a assinatura.' }
+      if (!subRow) {
+        // Workspaces novos devem ser registrados pelo próprio produto via
+        // /internal/billing/ensure-free-subscription. Nunca permitir que um
+        // usuário crie aqui uma subscription para um workspace arbitrário
+        // (evita takeover de workspace conhecendo apenas o ID).
+        set.status = 404
+        return { message: 'Workspace não encontrado.' }
       }
 
-      if (!subRow) {
-        ;[subRow] = await db
-          .insert(productSubscriptions)
-          .values({
-            id: generateId(),
-            productSlug: body.product_slug,
-            workspaceId: body.workspace_id,
-            workspaceName: body.workspace_name ?? null,
-            organizationId: body.organization_id ?? null,
-            ownerUserId: session.userId,
-            status: 'none',
-          })
-          .returning()
+      if (subRow.ownerUserId !== session.userId) {
+        set.status = 403
+        return { message: 'Apenas o dono do workspace pode gerenciar a assinatura.' }
       }
 
       // Plano pago "ativo" sem subscription no Stripe é resquício do fluxo
       // antigo (ativação direta no banco) — deixa passar pro checkout de
       // verdade em vez de bloquear como "plano atual".
       if (
-        subRow!.planId === plan.id &&
-        subRow!.status === 'active' &&
-        !subRow!.cancelAtPeriodEnd &&
-        (plan.priceCents === 0 || hasActiveStripeSubscription(subRow!))
+        subRow.planId === plan.id &&
+        subRow.status === 'active' &&
+        !subRow.cancelAtPeriodEnd &&
+        (plan.priceCents === 0 || hasActiveStripeSubscription(subRow))
       ) {
         set.status = 400
         return { message: 'Este já é o plano atual do workspace.' }
@@ -529,26 +552,26 @@ export const billingRoutes = new Elysia()
       // Plano grátis: com assinatura paga ativa, vira downgrade agendado —
       // o plano pago permanece até o fim do período já cobrado.
       if (plan.priceCents === 0) {
-        if (hasActiveStripeSubscription(subRow!)) {
+        if (hasActiveStripeSubscription(subRow)) {
           if (!stripe) {
             set.status = 503
             return { message: 'Stripe não configurado neste ambiente.' }
           }
-          const stripeSub = await stripe.subscriptions.update(subRow!.stripeSubscriptionId!, {
+          const stripeSub = await stripe.subscriptions.update(subRow.stripeSubscriptionId!, {
             cancel_at_period_end: true,
           })
-          const periodEnd = subscriptionPeriod(stripeSub).end ?? subRow!.currentPeriodEnd ?? new Date()
+          const periodEnd = subscriptionPeriod(stripeSub).end ?? subRow.currentPeriodEnd ?? new Date()
 
           await db
             .update(productSubscriptions)
             .set({ cancelAtPeriodEnd: true, currentPeriodEnd: periodEnd, updatedAt: new Date() })
-            .where(eq(productSubscriptions.id, subRow!.id))
+            .where(eq(productSubscriptions.id, subRow.id))
 
           const productName = await getProductName(body.product_slug)
-          const [currentPlan] = subRow!.planId
-            ? await db.select().from(productPlans).where(eq(productPlans.id, subRow!.planId)).limit(1)
+          const [currentPlan] = subRow.planId
+            ? await db.select().from(productPlans).where(eq(productPlans.id, subRow.planId)).limit(1)
             : []
-          await notifyBillingOwner(subRow!, {
+          await notifyBillingOwner(subRow, {
             title: 'Cancelamento agendado',
             body: `O plano ${currentPlan?.name ?? 'atual'} do ${productName} permanece ativo até ${periodEnd.toLocaleDateString('pt-BR')}. Depois disso, o workspace volta ao plano grátis.`,
             actionLabel: 'Retomar assinatura',
@@ -562,7 +585,7 @@ export const billingRoutes = new Elysia()
         await db
           .update(productSubscriptions)
           .set({ planId: plan.id, status: 'active', updatedAt: new Date() })
-          .where(eq(productSubscriptions.id, subRow!.id))
+          .where(eq(productSubscriptions.id, subRow.id))
 
         await enqueue({
           type: 'entitlements:sync',
@@ -586,12 +609,12 @@ export const billingRoutes = new Elysia()
 
       // Assinatura paga já ativa: troca de plano em cima da subscription
       // existente, sem novo checkout.
-      if (hasActiveStripeSubscription(subRow!)) {
-        const stripeSub = await stripe.subscriptions.retrieve(subRow!.stripeSubscriptionId!)
+      if (hasActiveStripeSubscription(subRow)) {
+        const stripeSub = await stripe.subscriptions.retrieve(subRow.stripeSubscriptionId!)
         const baseItem = await findBasePlanItem(stripeSub, body.product_slug)
 
-        const [currentPlanRow] = subRow!.planId
-          ? await db.select().from(productPlans).where(eq(productPlans.id, subRow!.planId)).limit(1)
+        const [currentPlanRow] = subRow.planId
+          ? await db.select().from(productPlans).where(eq(productPlans.id, subRow.planId)).limit(1)
           : []
         const isUpgrade = (currentPlanRow?.priceCents ?? 0) < plan.priceCents
 
@@ -610,8 +633,8 @@ export const billingRoutes = new Elysia()
           cancel_at_period_end: false,
           metadata: { ...stripeSub.metadata, planId: plan.id },
         }
-        console.log('[billing:upgrade] subscriptionId=%s params=%s', subRow!.stripeSubscriptionId!, JSON.stringify(updateParams))
-        const updatedSub = await stripe.subscriptions.update(subRow!.stripeSubscriptionId!, updateParams)
+        console.log('[billing:upgrade] subscriptionId=%s params=%s', subRow.stripeSubscriptionId!, JSON.stringify(updateParams))
+        const updatedSub = await stripe.subscriptions.update(subRow.stripeSubscriptionId!, updateParams)
 
         // O plano só é aplicado se o pagamento do upgrade for aprovado.
         // Com billing_cycle_anchor='now' o Stripe cobra imediatamente; se o
@@ -639,7 +662,7 @@ export const billingRoutes = new Elysia()
             ...(period.end ? { currentPeriodEnd: period.end } : {}),
             updatedAt: new Date(),
           })
-          .where(eq(productSubscriptions.id, subRow!.id))
+          .where(eq(productSubscriptions.id, subRow.id))
 
         await enqueue({
           type: 'entitlements:sync',
@@ -659,7 +682,7 @@ export const billingRoutes = new Elysia()
         }
 
         const productName = await getProductName(body.product_slug)
-        await notifyBillingOwner(subRow!, {
+        await notifyBillingOwner(subRow, {
           title: 'Plano alterado',
           body: `Seu plano no ${productName} agora é o ${plan.name}. A diferença de valor é ajustada proporcionalmente na próxima fatura.`,
           metadata: { planName: plan.name },
@@ -669,7 +692,7 @@ export const billingRoutes = new Elysia()
         return { changed: true as const }
       }
 
-      const customerId = await getOrCreateStripeCustomer(stripe, subRow!.id)
+      const customerId = await getOrCreateStripeCustomer(stripe, subRow.id)
 
       const checkout = await stripe.checkout.sessions.create({
         mode: 'subscription',
@@ -681,14 +704,14 @@ export const billingRoutes = new Elysia()
         cancel_url: body.cancel_url ?? `${WEB_URL}/billing`,
         subscription_data: {
           metadata: {
-            subscriptionRowId: subRow!.id,
+            subscriptionRowId: subRow.id,
             productSlug: body.product_slug,
             workspaceId: body.workspace_id,
             planId: plan.id,
           },
         },
         metadata: {
-          subscriptionRowId: subRow!.id,
+          subscriptionRowId: subRow.id,
           productSlug: body.product_slug,
           workspaceId: body.workspace_id,
           planId: plan.id,
@@ -1114,6 +1137,12 @@ export const billingRoutes = new Elysia()
       return { message: 'Stripe não configurado neste ambiente.' }
     }
 
+    const webhookSecret = getOptionalSecret('STRIPE_WEBHOOK_SECRET')
+    if (!webhookSecret) {
+      set.status = 503
+      return { message: 'Stripe webhook secret não configurado.' }
+    }
+
     const sig = request.headers.get('stripe-signature')
     if (!sig) {
       set.status = 400
@@ -1123,11 +1152,7 @@ export const billingRoutes = new Elysia()
     let event: Stripe.Event
     try {
       const rawBody = await request.text()
-      event = await stripe.webhooks.constructEventAsync(
-        rawBody,
-        sig,
-        process.env.STRIPE_WEBHOOK_SECRET!,
-      )
+      event = await stripe.webhooks.constructEventAsync(rawBody, sig, webhookSecret)
     } catch {
       set.status = 400
       return { message: 'Webhook signature verification failed.' }

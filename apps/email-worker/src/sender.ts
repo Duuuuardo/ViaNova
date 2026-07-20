@@ -64,7 +64,7 @@ export function defaultFrom(brand: EmailBrand): string {
 export async function sendEmail(options: SendOptions): Promise<void> {
   const transporter = getTransporter()
   if (!transporter) {
-    console.log(`[email-worker:dev] to=${options.to} subject="${options.subject}"`)
+    console.log(`[email-worker:dev] subject="${options.subject}"`)
     return
   }
   await transporter.sendMail({

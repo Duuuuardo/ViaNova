@@ -9,8 +9,9 @@ import {
   getAvatar,
   putAvatar,
 } from '../lib/storage'
+import { requireEnv } from '../lib/env'
 
-const API_URL = process.env.VIANOVA_API_URL ?? 'http://localhost:5000'
+const API_URL = requireEnv('VIANOVA_API_URL')
 
 export const accountRoutes = new Elysia()
   .use(authPlugin)

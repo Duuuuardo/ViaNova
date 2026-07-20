@@ -4,10 +4,11 @@ import { eq, and, gt, isNull } from 'drizzle-orm'
 import { getJwks, signUserToken, introspectToken } from '@vianova/oidc'
 import { generateId, generateToken, hashToken } from '../lib/crypto'
 import { authPlugin } from '../plugins/auth'
+import { requireEnv } from '../lib/env'
 
 const AUTH_CODE_TTL_MS = 60 * 1000 // uso único, vida curta
 
-const WEB_URL = process.env.VIANOVA_WEB_URL ?? 'http://localhost:3000'
+const WEB_URL = requireEnv('VIANOVA_WEB_URL')
 
 async function getActiveClient(clientId: string) {
   const [client] = await db

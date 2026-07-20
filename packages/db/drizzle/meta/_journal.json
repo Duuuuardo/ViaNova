@@ -29,6 +29,20 @@
       "when": 1784431440194,
       "tag": "0003_wealthy_grim_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784481057064,
+      "tag": "0004_safe_login_challenge",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784482743630,
+      "tag": "0005_wise_spacker_dave",
+      "breakpoints": true
     }
   ]
 }
