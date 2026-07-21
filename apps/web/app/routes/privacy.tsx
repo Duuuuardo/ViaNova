@@ -1,14 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ViaLogo } from '../components/brand'
-import { createHeadConfig } from '../../lib/seo'
+import { createHeadConfig } from '../lib/seo'
 
-export const Route = createFileRoute('/privacy')({ head: () => createHeadConfig('Política de Privacidade — Vianova'),
-  head: () => ({
-    meta: [
-      { title: 'Política de Privacidade — Vianova' },
-      { name: 'description', content: 'Política de Privacidade da plataforma Vianova, em conformidade com a LGPD.' },
-    ],
-  }),
+export const Route = createFileRoute('/privacy')({
+  head: () => createHeadConfig('Política de Privacidade — Vianova'),
   component: PrivacidadePage,
 })
 

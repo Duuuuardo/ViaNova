@@ -2,7 +2,7 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { Button, Card, ErrorNote, Field } from '../../../components/ui'
-import { createHeadConfig } from '../../lib/seo'
+import { createHeadConfig } from '../../../lib/seo'
 
 export const Route = createFileRoute('/_app/organizations/')({ head: () => createHeadConfig('Organizações — Vianova'),
   component: OrganizationsPage,

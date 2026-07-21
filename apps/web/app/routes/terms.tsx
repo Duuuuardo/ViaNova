@@ -1,14 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ViaLogo } from '../components/brand'
-import { createHeadConfig } from '../../lib/seo'
+import { createHeadConfig } from '../lib/seo'
 
-export const Route = createFileRoute('/terms')({ head: () => createHeadConfig('Termos de Uso — Vianova'),
-  head: () => ({
-    meta: [
-      { title: 'Termos de Uso — Vianova' },
-      { name: 'description', content: 'Termos de Uso da plataforma Vianova.' },
-    ],
-  }),
+export const Route = createFileRoute('/terms')({
+  head: () => createHeadConfig('Termos de Uso — Vianova'),
   component: TermosPage,
 })
 
