@@ -5,8 +5,10 @@ import { parseApiError } from '../../lib/api-error'
 import { safeOidcRedirect, productSlugFromRedirect } from '../../lib/redirect'
 import { Button, ErrorNote } from '../../components/ui'
 import { RouteLine } from '../../components/brand'
+import { createHeadConfig } from '../../lib/seo'
 
 export const Route = createFileRoute('/_auth/login')({
+  head: () => createHeadConfig('Entrar — Vianova'),
   validateSearch: (search: Record<string, unknown>) => ({
     redirect_uri: typeof search.redirect_uri === 'string' ? search.redirect_uri : undefined,
   }),

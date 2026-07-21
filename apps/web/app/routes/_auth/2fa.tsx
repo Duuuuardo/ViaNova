@@ -3,8 +3,9 @@ import { useState } from 'react'
 import { api } from '../../lib/api'
 import { safeOidcRedirect } from '../../lib/redirect'
 import { Button, ErrorNote, Field } from '../../components/ui'
+import { createHeadConfig } from '../../lib/seo'
 
-export const Route = createFileRoute('/_auth/2fa')({
+export const Route = createFileRoute('/_auth/2fa')({ head: () => createHeadConfig('Verificação em duas etapas — Vianova'),
   validateSearch: (search: Record<string, unknown>) => ({
     redirect_uri: typeof search.redirect_uri === 'string' ? search.redirect_uri : undefined,
   }),

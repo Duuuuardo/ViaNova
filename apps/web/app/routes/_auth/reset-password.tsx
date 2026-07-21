@@ -3,8 +3,9 @@ import { useState } from 'react'
 import { api } from '../../lib/api'
 import { parseApiError } from '../../lib/api-error'
 import { Button, ErrorNote, Field } from '../../components/ui'
+import { createHeadConfig } from '../../lib/seo'
 
-export const Route = createFileRoute('/_auth/reset-password')({
+export const Route = createFileRoute('/_auth/reset-password')({ head: () => createHeadConfig('Redefinir senha — Vianova'),
   validateSearch: (search: Record<string, unknown>) => ({
     token: typeof search.token === 'string' ? search.token : undefined,
   }),

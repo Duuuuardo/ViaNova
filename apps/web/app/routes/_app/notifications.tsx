@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { Bell, CheckCheck, ExternalLink, Loader2, ArrowLeft } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button, Card } from '../../components/ui'
+import { createHeadConfig } from '../../lib/seo'
 
-export const Route = createFileRoute('/_app/notifications')({
+export const Route = createFileRoute('/_app/notifications')({ head: () => createHeadConfig('Notificações — Vianova'),
   component: NotificationsPage,
 })
 

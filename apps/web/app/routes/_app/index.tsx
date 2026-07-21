@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { ExternalLink, FolderKanban } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Card, SectionTitle } from '../../components/ui'
+import { createHeadConfig } from '../../lib/seo'
 
-export const Route = createFileRoute('/_app/')({
+export const Route = createFileRoute('/_app/')({ head: () => createHeadConfig('Início — Vianova'),
   component: HomePage,
 })
 

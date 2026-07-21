@@ -19,8 +19,9 @@ import {
 import { api } from '../../lib/api'
 import { Button, Card, ErrorNote, Field, SectionTitle, StatusDot, ToggleRow } from '../../components/ui'
 import { Avatar, type AvatarFrame } from '../../components/avatar'
+import { createHeadConfig } from '../../lib/seo'
 
-export const Route = createFileRoute('/_app/profile')({
+export const Route = createFileRoute('/_app/profile')({ head: () => createHeadConfig('Perfil — Vianova'),
   component: ProfilePage,
 })
 

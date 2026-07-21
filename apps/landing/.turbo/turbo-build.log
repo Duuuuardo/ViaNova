@@ -3,7 +3,7 @@ The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths r
 The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
 The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
 vite v8.1.4 building client environment for production...
-[2Ktransforming...✓ 1880 modules transformed.
+[2Ktransforming...✓ 1881 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/client/assets/ibm-plex-mono-vietnamese-500-normal-C8zxqsMH.woff       5.61 kB
@@ -34,20 +34,20 @@ dist/client/assets/public-sans-latin-wght-normal-DdeTHZLK.woff2           26.83 
 dist/client/assets/overpass-cyrillic-wght-normal-Bb0oHPsy.woff2           27.44 kB
 dist/client/assets/overpass-latin-wght-normal-qAR8M_co.woff2              39.38 kB
 dist/client/assets/overpass-latin-ext-wght-normal-DvafStyF.woff2          46.08 kB
-dist/client/assets/index-DaO0IMPM.css                                     28.28 kB │ gzip:   5.68 kB
-dist/client/assets/routes-H7vm1fmF.js                                     17.91 kB │ gzip:   5.15 kB
-dist/client/assets/index-yhVOytrw.js                                     315.98 kB │ gzip: 100.21 kB
+dist/client/assets/index-BsQ6ffn6.css                                     31.64 kB │ gzip:   6.23 kB
+dist/client/assets/routes-Rkx_81DB.js                                     23.00 kB │ gzip:   6.48 kB
+dist/client/assets/index-DiYDNd5G.js                                     317.01 kB │ gzip: 100.50 kB
 
-✓ built in 1.18s
+✓ built in 2.18s
 vite v8.1.4 building ssr environment for production...
-[2Ktransforming...✓ 106 modules transformed.
+[2Ktransforming...✓ 109 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/server/assets/start-CPgSJ7Ui.js                         0.21 kB │ gzip:  0.17 kB
 dist/server/assets/empty-plugin-adapters-BuQpD_9R.js         0.28 kB │ gzip:  0.18 kB
-dist/server/assets/_tanstack-start-manifest_v-DYbu4f77.js    0.57 kB │ gzip:  0.32 kB
-dist/server/assets/router-nS0lBwaV.js                        1.65 kB │ gzip:  0.74 kB
-dist/server/assets/routes-h2lXa-iu.js                       18.87 kB │ gzip:  4.23 kB
-dist/server/server.js                                      171.76 kB │ gzip: 42.86 kB
+dist/server/assets/_tanstack-start-manifest_v-DofTxAuh.js    0.57 kB │ gzip:  0.32 kB
+dist/server/assets/router-CWHAh5DC.js                        3.03 kB │ gzip:  1.03 kB
+dist/server/assets/routes-DPp117H_.js                       25.68 kB │ gzip:  5.74 kB
+dist/server/server.js                                      173.57 kB │ gzip: 43.49 kB
 
-✓ built in 557ms
+✓ built in 933ms

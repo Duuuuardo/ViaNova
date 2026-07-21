@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { CalendarClock, HardDrive, Package, Undo2, Upload, Users, Link2, Zap, Megaphone, Workflow } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button, Card, ErrorNote, StatusDot } from '../../components/ui'
+import { createHeadConfig } from '../../lib/seo'
 
-export const Route = createFileRoute('/_app/billing')({
+export const Route = createFileRoute('/_app/billing')({ head: () => createHeadConfig('Cobrança — Vianova'),
   component: BillingPage,
 })
 

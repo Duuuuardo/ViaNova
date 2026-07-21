@@ -10,8 +10,9 @@ import {
 import { api } from '../../lib/api'
 import { Button, Card, ErrorNote } from '../../components/ui'
 import { FilePreviewModal, FileThumbnail, fileIcon, type WorkspaceFile } from '../../components/file-preview'
+import { createHeadConfig } from '../../lib/seo'
 
-export const Route = createFileRoute('/_app/files')({
+export const Route = createFileRoute('/_app/files')({ head: () => createHeadConfig('Arquivos — Vianova'),
   component: FilesPage,
 })
 

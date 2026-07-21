@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
+import { createHeadConfig } from '../../lib/seo'
 
-export const Route = createFileRoute('/_auth/verify-email')({
+export const Route = createFileRoute('/_auth/verify-email')({ head: () => createHeadConfig('Verificar e-mail — Vianova'),
   validateSearch: (search: Record<string, unknown>) => ({
     token: typeof search.token === 'string' ? search.token : undefined,
   }),

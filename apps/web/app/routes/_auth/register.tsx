@@ -4,8 +4,10 @@ import { api } from '../../lib/api'
 import { parseApiError } from '../../lib/api-error'
 import { safeOidcRedirect } from '../../lib/redirect'
 import { Button, ErrorNote } from '../../components/ui'
+import { createHeadConfig } from '../../lib/seo'
 
 export const Route = createFileRoute('/_auth/register')({
+  head: () => createHeadConfig('Criar conta — Vianova'),
   validateSearch: (search: Record<string, unknown>) => ({
     redirect_uri: typeof search.redirect_uri === 'string' ? search.redirect_uri : undefined,
   }),

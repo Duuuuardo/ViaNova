@@ -4,8 +4,9 @@ import QRCode from 'react-qr-code'
 import { KeyRound, ShieldCheck, Smartphone, Laptop, LogOut, ShieldAlert, Check, X, AlertCircle } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button, Card, ErrorNote, Field } from '../../components/ui'
+import { createHeadConfig } from '../../lib/seo'
 
-export const Route = createFileRoute('/_app/security')({
+export const Route = createFileRoute('/_app/security')({ head: () => createHeadConfig('Segurança — Vianova'),
   component: SecurityPage,
 })
 

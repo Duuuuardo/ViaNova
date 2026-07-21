@@ -2,8 +2,9 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../lib/api'
 import { Button, Field } from '../../components/ui'
+import { createHeadConfig } from '../../lib/seo'
 
-export const Route = createFileRoute('/_auth/forgot-password')({
+export const Route = createFileRoute('/_auth/forgot-password')({ head: () => createHeadConfig('Esqueci minha senha — Vianova'),
   component: ForgotPasswordPage,
 })
 
