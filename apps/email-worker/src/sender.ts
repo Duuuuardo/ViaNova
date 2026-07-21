@@ -27,7 +27,7 @@ export const BRANDS: Record<EmailBrand, BrandConfig> = {
   },
   naia: {
     name: 'Naia Campanhas',
-    domain: 'campaigns.naia.website',
+    domain: 'vianova.software',
     color: '#DD5973',
     fontFamily: "'Plus Jakarta Sans', ui-sans-serif, sans-serif",
     fontImport:
@@ -35,7 +35,7 @@ export const BRANDS: Record<EmailBrand, BrandConfig> = {
   },
   crm: {
     name: 'Naia CRM',
-    domain: 'crm.naia.website',
+    domain: 'vianova.software',
     color: '#DD5973',
     fontFamily: "'Plus Jakarta Sans', ui-sans-serif, sans-serif",
     fontImport:
