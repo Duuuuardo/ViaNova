@@ -18,7 +18,7 @@ export function getCookieOptions() {
   const domain = process.env.VIANOVA_COOKIE_DOMAIN
   return {
     httpOnly: true,
-    sameSite: 'lax' as const,
+    sameSite: 'none' as const,
     secure: isProduction,
     path: '/',
     ...(domain ? { domain } : {}),
