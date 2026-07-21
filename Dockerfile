@@ -18,6 +18,11 @@ RUN if [ -f apps/${APP}/dist/server/server.js ]; then \
   bun build dist/server/server.js --bundle --target bun --outfile /tmp/server.js && \
   mv /tmp/server.js dist/server/server.js; \
 fi
+# For API: build migrate and seed scripts so they can be run via docker exec.
+RUN if [ "${APP}" = "api" ]; then \
+  bun build apps/api/src/migrate.ts --bundle --target bun --outfile apps/api/dist/migrate.js && \
+  bun build packages/db/src/seed.ts --bundle --target bun --outfile apps/api/dist/seed.js; \
+fi
 
 FROM oven/bun:1.3.14-slim AS runtime
 WORKDIR /app
@@ -26,6 +31,8 @@ ENV NODE_ENV=production
 ENV APP=${APP}
 
 COPY --from=base /app/apps/${APP}/dist ./dist
+# Migration SQL files — needed at runtime by migrate.js (drizzle-orm/migrator).
+COPY --from=base /app/packages/db/drizzle ./drizzle
 # docker-serve.mjs: static-file server + SSR fallback for web apps.
 # For API apps this file is present but ignored (CMD uses dist/index.js).
 COPY docker-serve.mjs ./docker-serve.mjs

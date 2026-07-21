@@ -31,8 +31,8 @@ async function seed() {
       apiUrl: requireEnv('NAIA_API_URL'),
       oidcClientSecretHash: hashSecret(NAIA_DEV_CLIENT_SECRET),
       redirectUris: [
+        `${requireEnv('NAIA_WEB_URL')}/auth/callback`,
         'http://localhost:3001/auth/callback',
-        // Cliente OIDC de teste do Milestone 1 (scripts/mock-oidc-client.ts)
         'http://localhost:9999/callback',
       ],
     })
@@ -42,7 +42,11 @@ async function seed() {
         name: 'Naia Campanhas',
         domain: 'naia.website',
         oidcClientSecretHash: hashSecret(NAIA_DEV_CLIENT_SECRET),
-        redirectUris: ['http://localhost:3001/auth/callback', 'http://localhost:9999/callback'],
+        redirectUris: [
+          `${requireEnv('NAIA_WEB_URL')}/auth/callback`,
+          'http://localhost:3001/auth/callback',
+          'http://localhost:9999/callback',
+        ],
       },
     })
 
