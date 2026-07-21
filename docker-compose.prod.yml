@@ -101,6 +101,8 @@ services:
       novaplatform:
         aliases:
           - vianova-landing
+    environment:
+      - PORT=3300
     env_file:
       - ./.env
 
