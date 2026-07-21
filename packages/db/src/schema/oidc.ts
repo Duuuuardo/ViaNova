@@ -13,6 +13,10 @@ export const oidcAuthCodes = pgTable('oidc_auth_codes', {
   redirectUri: text('redirect_uri').notNull(),
   scope: text('scope').notNull().default('openid'),
   nonce: text('nonce'),
+  // PKCE (RFC 7636): challenge enviado no /authorize, verificado contra o
+  // code_verifier no /token. Nulo para clientes legados que não usam PKCE.
+  codeChallenge: text('code_challenge'),
+  codeChallengeMethod: text('code_challenge_method'),
   expiresAt: timestamp('expires_at').notNull(),
   usedAt: timestamp('used_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),

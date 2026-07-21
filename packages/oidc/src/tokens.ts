@@ -23,6 +23,7 @@ export interface UserTokenInput {
     name: string
     avatarUrl?: string | null
     avatarFrame?: string | null
+    emailVerifiedAt?: Date | null
   }
   sessionId: string
   clientSlug: string
@@ -37,6 +38,9 @@ export async function signUserToken({ user, sessionId, clientSlug, nonce }: User
   const jwt = new SignJWT({
     email: user.email,
     name: user.name,
+    // Claim padrão OIDC — indica se o email foi confirmado pelo usuário.
+    // Produtos usam este claim para decidir limitações de funcionalidade.
+    email_verified: user.emailVerifiedAt != null,
     // Avatar servido pelo MinIO do Vianova — produtos exibem a URL, nunca
     // armazenam a imagem nem falam com o storage direto.
     ...(user.avatarUrl ? { picture: user.avatarUrl } : {}),

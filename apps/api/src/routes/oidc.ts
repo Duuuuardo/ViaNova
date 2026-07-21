@@ -1,4 +1,5 @@
 import { Elysia, t } from 'elysia'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { db, productCatalog, oidcAuthCodes, oidcRefreshTokens, users, sessions } from '@vianova/db'
 import { eq, and, gt, isNull } from 'drizzle-orm'
 import { getJwks, signUserToken, introspectToken } from '@vianova/oidc'
@@ -23,7 +24,23 @@ async function getActiveClient(clientId: string) {
 }
 
 function verifyClientSecret(client: { oidcClientSecretHash: string }, secret: string): boolean {
-  return hashToken(secret) === client.oidcClientSecretHash
+  const a = Buffer.from(hashToken(secret))
+  const b = Buffer.from(client.oidcClientSecretHash)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+// PKCE (RFC 7636). Só aceitamos S256 — `plain` é rejeitado. Comparação
+// timing-safe do challenge derivado do verifier contra o challenge armazenado.
+function verifyPkce(
+  codeVerifier: string | undefined,
+  challenge: string,
+  method: string | null,
+): boolean {
+  if (method !== 'S256' || !codeVerifier) return false
+  const derived = createHash('sha256').update(codeVerifier).digest('base64url')
+  const a = Buffer.from(derived)
+  const b = Buffer.from(challenge)
+  return a.length === b.length && timingSafeEqual(a, b)
 }
 
 export const oidcRoutes = new Elysia()
@@ -70,6 +87,8 @@ export const oidcRoutes = new Elysia()
         redirectUri: redirect_uri,
         scope: scope ?? 'openid',
         nonce: nonce ?? null,
+        codeChallenge: query.code_challenge ?? null,
+        codeChallengeMethod: query.code_challenge ? (query.code_challenge_method ?? 'plain') : null,
         expiresAt: new Date(Date.now() + AUTH_CODE_TTL_MS),
       })
 
@@ -87,6 +106,8 @@ export const oidcRoutes = new Elysia()
         state: t.Optional(t.String()),
         scope: t.Optional(t.String()),
         nonce: t.Optional(t.String()),
+        code_challenge: t.Optional(t.String()),
+        code_challenge_method: t.Optional(t.String()),
       }),
     },
   )
@@ -173,6 +194,7 @@ export const oidcRoutes = new Elysia()
             name: user.name,
             avatarUrl: user.avatarUrl,
             avatarFrame: user.avatarFrame,
+            emailVerifiedAt: user.emailVerifiedAt,
           },
           sessionId: existing.sessionId,
           clientSlug: client.slug,
@@ -221,6 +243,17 @@ export const oidcRoutes = new Elysia()
         return { error: 'invalid_grant' as const }
       }
 
+      // PKCE: se o código foi emitido com challenge, o verifier é obrigatório e
+      // tem que bater. Fecha injeção de código de autorização mesmo que o
+      // client_secret vaze ou o código seja interceptado.
+      if (authCode.codeChallenge) {
+        if (!verifyPkce(body.code_verifier, authCode.codeChallenge, authCode.codeChallengeMethod)) {
+          await db.update(oidcAuthCodes).set({ usedAt: now }).where(eq(oidcAuthCodes.id, authCode.id))
+          set.status = 400
+          return { error: 'invalid_grant' as const }
+        }
+      }
+
       await db.update(oidcAuthCodes).set({ usedAt: now }).where(eq(oidcAuthCodes.id, authCode.id))
 
       // Sessão precisa continuar viva entre o authorize e o token — logout no
@@ -249,6 +282,7 @@ export const oidcRoutes = new Elysia()
           name: user.name,
           avatarUrl: user.avatarUrl,
           avatarFrame: user.avatarFrame,
+          emailVerifiedAt: user.emailVerifiedAt,
         },
         sessionId: authCode.sessionId,
         clientSlug: client.slug,
@@ -282,6 +316,7 @@ export const oidcRoutes = new Elysia()
         client_secret: t.String(),
         redirect_uri: t.Optional(t.String()),
         refresh_token: t.Optional(t.String()),
+        code_verifier: t.Optional(t.String()),
       }),
     },
   )

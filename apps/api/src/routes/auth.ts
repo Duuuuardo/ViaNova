@@ -543,6 +543,11 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
       return { message: 'Usuário não encontrado.' }
     }
 
+    if (!user.emailVerifiedAt) {
+      set.status = 403
+      return { message: 'Confirme seu email antes de ativar a verificação em duas etapas.' }
+    }
+
     if (user.twoFactorEnabled) {
       set.status = 400
       return { message: '2FA já está ativo.' }
