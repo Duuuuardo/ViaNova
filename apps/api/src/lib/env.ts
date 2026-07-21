@@ -15,11 +15,13 @@ export function requireEnvInProduction(name: string): string | undefined {
 export const isProduction = process.env.NODE_ENV === 'production'
 
 export function getCookieOptions() {
+  const domain = process.env.VIANOVA_COOKIE_DOMAIN
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
     secure: isProduction,
     path: '/',
+    ...(domain ? { domain } : {}),
   }
 }
 
