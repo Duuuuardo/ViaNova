@@ -15,6 +15,7 @@ import {
 import { getSession } from '../lib/auth'
 import { api } from '../lib/api'
 import { ViaLogo } from '../components/brand'
+import { NotFoundEmbedded } from '../components/error-pages'
 import { Avatar } from '../components/avatar'
 import { MobileNav } from '../components/mobile-nav'
 import { NotificationBell } from '../components/notifications'
@@ -28,6 +29,7 @@ export const Route = createFileRoute('/_app')({
     return { user }
   },
   component: AppLayout,
+  notFoundComponent: NotFoundEmbedded,
 })
 
 export const navItems = [

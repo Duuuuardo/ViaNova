@@ -1,4 +1,4 @@
-import { Link, useRouter, type ErrorComponentProps } from '@tanstack/react-router'
+import { Link, useMatch, useRouter, type ErrorComponentProps } from '@tanstack/react-router'
 import { House, RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { ViaLogo } from './brand'
@@ -7,6 +7,10 @@ import { ViaLogo } from './brand'
  * Telas de erro da marca Vianova. O elemento-assinatura deriva da marca (vias
  * que convergem num ponto — a linha de rota): no 404 a rota tracejada termina
  * num destino vazio; no 500 a rota se rompe antes de chegar ao ponto.
+ *
+ * Duas variantes: a página inteira (rotas sem shell) e a embutida, usada como
+ * notFoundComponent/errorComponent de layouts logados — sem logo (a topbar já
+ * tem a marca) e sem fundo próprio, para herdar o fundo do conteúdo.
  */
 
 const VIA = '#A63FE8'
@@ -49,6 +53,7 @@ function RouteBroken() {
 }
 
 function ErrorShell({
+  embedded = false,
   signature,
   code,
   title,
@@ -56,6 +61,7 @@ function ErrorShell({
   actions,
   detail,
 }: {
+  embedded?: boolean
   signature: ReactNode
   code: string
   title: string
@@ -64,7 +70,11 @@ function ErrorShell({
   detail?: ReactNode
 }) {
   return (
-    <main className="err-page flex min-h-dvh flex-col items-center justify-center bg-paper px-6 py-16 text-center">
+    <main
+      className={`err-page flex flex-col items-center justify-center px-6 text-center ${
+        embedded ? 'min-h-[60vh] py-12' : 'min-h-dvh bg-paper py-16'
+      }`}
+    >
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
           .err-page [data-err-item] {
@@ -81,12 +91,12 @@ function ErrorShell({
           }
         }
       `}</style>
-      <div data-err-item="0">
-        <ViaLogo size={26} />
-      </div>
-      <div className="mt-14" data-err-item="1">
-        {signature}
-      </div>
+      {!embedded && (
+        <div className="mb-14" data-err-item="0">
+          <ViaLogo size={26} />
+        </div>
+      )}
+      <div data-err-item="1">{signature}</div>
       <p
         className="mt-8 font-mono text-xs font-medium tracking-[0.2em] text-via-700"
         data-err-item="2"
@@ -115,9 +125,10 @@ const primaryBtn =
 const quietLink =
   'inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 underline-offset-4 transition-colors duration-150 hover:text-ink-900 hover:underline'
 
-export function NotFoundPage() {
+function NotFoundContent({ embedded = false }: { embedded?: boolean }) {
   return (
     <ErrorShell
+      embedded={embedded}
       signature={<RouteNoDestination />}
       code="ERRO 404"
       title="Página não encontrada"
@@ -132,11 +143,16 @@ export function NotFoundPage() {
   )
 }
 
-export function ErrorPage({ error, reset }: ErrorComponentProps) {
+function ErrorContent({
+  embedded = false,
+  error,
+  reset,
+}: { embedded?: boolean } & ErrorComponentProps) {
   const router = useRouter()
 
   return (
     <ErrorShell
+      embedded={embedded}
       signature={<RouteBroken />}
       code="ERRO 500"
       title="Algo deu errado"
@@ -168,4 +184,25 @@ export function ErrorPage({ error, reset }: ErrorComponentProps) {
       }
     />
   )
+}
+
+export function NotFoundPage() {
+  return <NotFoundContent />
+}
+
+export function NotFoundEmbedded() {
+  return <NotFoundContent embedded />
+}
+
+export function ErrorPage(props: ErrorComponentProps) {
+  // Erros em rotas filhas do shell logado renderizam dentro do Outlet do
+  // layout — nesse caso usa a variante embutida para herdar o fundo do
+  // conteúdo e não repetir a marca que a topbar já mostra.
+  const match = useMatch({ strict: false })
+  const insideShell = String(match.routeId).startsWith('/_app/')
+  return <ErrorContent embedded={insideShell} {...props} />
+}
+
+export function ErrorEmbedded(props: ErrorComponentProps) {
+  return <ErrorContent embedded {...props} />
 }
