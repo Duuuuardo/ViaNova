@@ -1,12 +1,15 @@
 import { Elysia, t } from 'elysia'
-import { db, productCatalog, oidcAuthCodes, users, sessions } from '@vianova/db'
+import { db, productCatalog, oidcAuthCodes, oidcRefreshTokens, users, sessions } from '@vianova/db'
 import { eq, and, gt, isNull } from 'drizzle-orm'
 import { getJwks, signUserToken, introspectToken } from '@vianova/oidc'
 import { generateId, generateToken, hashToken } from '../lib/crypto'
 import { authPlugin } from '../plugins/auth'
-import { requireEnv } from '../lib/env'
+import { getCookieOptions, requireEnv } from '../lib/env'
+import { deleteSession, SESSION_COOKIE } from '../lib/session'
+import { enqueue } from '../lib/queue'
 
 const AUTH_CODE_TTL_MS = 60 * 1000 // uso único, vida curta
+const REFRESH_TOKEN_TTL_DAYS = 30
 
 const WEB_URL = requireEnv('VIANOVA_WEB_URL')
 
@@ -88,20 +91,112 @@ export const oidcRoutes = new Elysia()
     },
   )
 
-  // Troca código por JWT assinado. Chamada server-to-server do produto,
-  // autenticada por client_secret.
+  // Troca código ou refresh token por JWT assinado. Chamada server-to-server,
+  // autenticada por client_secret. Suporta dois grant types:
+  //   authorization_code — troca código de autorização por access + refresh token
+  //   refresh_token      — rotaciona refresh token e emite novo par de tokens
   .post(
     '/oidc/token',
     async ({ body, set }) => {
+      const client = await getActiveClient(body.client_id)
+      if (!client || !verifyClientSecret(client, body.client_secret)) {
+        set.status = 401
+        return { error: 'invalid_client' as const }
+      }
+
+      // ── refresh_token grant ─────────────────────────────────────────────────
+      if (body.grant_type === 'refresh_token') {
+        if (!body.refresh_token) {
+          set.status = 400
+          return { error: 'invalid_request' as const }
+        }
+
+        const now = new Date()
+        const tokenHash = hashToken(body.refresh_token)
+
+        const [existing] = await db
+          .select()
+          .from(oidcRefreshTokens)
+          .where(
+            and(
+              eq(oidcRefreshTokens.tokenHash, tokenHash),
+              isNull(oidcRefreshTokens.usedAt),
+              gt(oidcRefreshTokens.expiresAt, now),
+              eq(oidcRefreshTokens.clientSlug, client.slug),
+            ),
+          )
+          .limit(1)
+
+        if (!existing) {
+          set.status = 400
+          return { error: 'invalid_grant' as const }
+        }
+
+        // Sessão Vianova ainda precisa estar ativa — refresh_token é amarrado ao sid.
+        const [activeSession] = await db
+          .select({ id: sessions.id })
+          .from(sessions)
+          .where(and(eq(sessions.id, existing.sessionId), gt(sessions.expiresAt, now)))
+          .limit(1)
+
+        if (!activeSession) {
+          set.status = 400
+          return { error: 'invalid_grant' as const }
+        }
+
+        const [user] = await db.select().from(users).where(eq(users.id, existing.userId)).limit(1)
+        if (!user) {
+          set.status = 400
+          return { error: 'invalid_grant' as const }
+        }
+
+        // Rotação: marca o token atual como usado e emite um novo par.
+        await db
+          .update(oidcRefreshTokens)
+          .set({ usedAt: now })
+          .where(eq(oidcRefreshTokens.id, existing.id))
+
+        const newRefreshToken = generateToken()
+        await db.insert(oidcRefreshTokens).values({
+          id: generateId(),
+          tokenHash: hashToken(newRefreshToken),
+          userId: existing.userId,
+          sessionId: existing.sessionId,
+          clientSlug: client.slug,
+          expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000),
+        })
+
+        const { token, expiresIn } = await signUserToken({
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+            avatarFrame: user.avatarFrame,
+          },
+          sessionId: existing.sessionId,
+          clientSlug: client.slug,
+        })
+
+        return {
+          access_token: token,
+          id_token: token,
+          token_type: 'Bearer' as const,
+          expires_in: expiresIn,
+          refresh_token: newRefreshToken,
+          refresh_token_expires_in: REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60,
+        }
+      }
+
+      // ── authorization_code grant ────────────────────────────────────────────
       if (body.grant_type !== 'authorization_code') {
         set.status = 400
         return { error: 'unsupported_grant_type' as const }
       }
 
-      const client = await getActiveClient(body.client_id)
-      if (!client || !verifyClientSecret(client, body.client_secret)) {
-        set.status = 401
-        return { error: 'invalid_client' as const }
+      if (!body.code || !body.redirect_uri) {
+        set.status = 400
+        return { error: 'invalid_request' as const }
       }
 
       const now = new Date()
@@ -160,20 +255,33 @@ export const oidcRoutes = new Elysia()
         nonce: authCode.nonce,
       })
 
+      const refreshToken = generateToken()
+      await db.insert(oidcRefreshTokens).values({
+        id: generateId(),
+        tokenHash: hashToken(refreshToken),
+        userId: authCode.userId,
+        sessionId: authCode.sessionId,
+        clientSlug: client.slug,
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000),
+      })
+
       return {
         access_token: token,
         id_token: token,
         token_type: 'Bearer' as const,
         expires_in: expiresIn,
+        refresh_token: refreshToken,
+        refresh_token_expires_in: REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60,
       }
     },
     {
       body: t.Object({
         grant_type: t.String(),
-        code: t.String(),
+        code: t.Optional(t.String()),
         client_id: t.String(),
         client_secret: t.String(),
-        redirect_uri: t.String(),
+        redirect_uri: t.Optional(t.String()),
+        refresh_token: t.Optional(t.String()),
       }),
     },
   )
@@ -196,6 +304,59 @@ export const oidcRoutes = new Elysia()
         token: t.String(),
         client_id: t.String(),
         client_secret: t.String(),
+      }),
+    },
+  )
+
+  // RP-initiated logout (OIDC end_session). Recebe a sessão do Vianova via
+  // cookie, encerra-a e redireciona o browser de volta ao produto. É o único
+  // jeito de garantir que logout de um produto derruba a sessão no Vianova e,
+  // via webhook session:revoked, nos demais produtos.
+  .get(
+    '/oidc/end_session',
+    async ({ query, session, cookie, redirect }) => {
+      const { post_logout_redirect_uri } = query
+
+      if (session) {
+        const token = cookie[SESSION_COOKIE]?.value as string | undefined
+        if (token) {
+          const deletedSessionId = await deleteSession(token)
+          if (deletedSessionId) {
+            await enqueue({
+              type: 'session:revoked',
+              userId: session.userId,
+              sessionIds: [deletedSessionId],
+            })
+          }
+        }
+        cookie[SESSION_COOKIE].set({ value: '', maxAge: 0, path: '/' })
+      }
+
+      // Valida o redirect_uri para evitar open redirect: só aceita URIs
+      // que pertençam a produtos registrados no catálogo.
+      if (post_logout_redirect_uri) {
+        const products = await db.select({ redirectUris: productCatalog.redirectUris }).from(productCatalog)
+        const allUris = products.flatMap((p) => p.redirectUris)
+        const isAllowed = allUris.some((uri) => {
+          try {
+            const allowed = new URL(uri)
+            const candidate = new URL(post_logout_redirect_uri)
+            return allowed.origin === candidate.origin
+          } catch {
+            return false
+          }
+        })
+
+        if (isAllowed) {
+          return redirect(post_logout_redirect_uri, 302)
+        }
+      }
+
+      return redirect(`${WEB_URL}/login`, 302)
+    },
+    {
+      query: t.Object({
+        post_logout_redirect_uri: t.Optional(t.String()),
       }),
     },
   )

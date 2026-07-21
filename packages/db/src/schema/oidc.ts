@@ -40,6 +40,22 @@ export const serviceTokens = pgTable('service_tokens', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
+// Refresh tokens OIDC. Opacos, rotacionados a cada uso.
+// O `sid` amarra o refresh token à sessão do Vianova: quando a sessão cai
+// (logout ou expiração), todos os refresh tokens associados são deletados via
+// ON DELETE CASCADE — nenhum produto consegue renovar um acesso já revogado.
+export const oidcRefreshTokens = pgTable('oidc_refresh_tokens', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull().unique(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  clientSlug: text('client_slug').notNull().references(() => productCatalog.slug),
+  usedAt: timestamp('used_at'),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
 export type OidcAuthCode = typeof oidcAuthCodes.$inferSelect
 export type OidcKey = typeof oidcKeys.$inferSelect
 export type ServiceToken = typeof serviceTokens.$inferSelect
+export type OidcRefreshToken = typeof oidcRefreshTokens.$inferSelect

@@ -63,6 +63,8 @@ export async function deleteSession(token: string): Promise<string | null> {
     .delete(sessions)
     .where(eq(sessions.tokenHash, tokenHash))
     .returning({ id: sessions.id, userId: sessions.userId })
+  // ON DELETE CASCADE no FK oidcRefreshTokens.sessionId → sessions.id
+  // garante que os refresh tokens associados são deletados automaticamente.
   return deleted?.id ?? null
 }
 
