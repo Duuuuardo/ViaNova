@@ -8,6 +8,8 @@ interface Bucket {
 const store = new Map<string, Bucket>()
 
 function getClientIp(request: Request): string {
+  const cf = request.headers.get('cf-connecting-ip')
+  if (cf) return cf
   const forwarded = request.headers.get('x-forwarded-for')
   if (forwarded) {
     const first = forwarded.split(',')[0]?.trim()

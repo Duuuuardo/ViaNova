@@ -1,3 +1,11 @@
+export function getClientIp(request: Request): string | undefined {
+  const cf = request.headers.get('cf-connecting-ip')
+  if (cf) return cf
+  const forwarded = request.headers.get('x-forwarded-for')
+  if (forwarded) return forwarded.split(',')[0].trim()
+  return undefined
+}
+
 export function requireEnv(name: string): string {
   const value = process.env[name]
   if (!value || value.trim().length === 0) {

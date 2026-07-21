@@ -8,7 +8,7 @@ import { generateTotpSecret, getTotpUri, verifyTotp } from '../lib/totp'
 import { enqueue } from '../lib/queue'
 import { notifyUser } from '../lib/notifications'
 import { authPlugin } from '../plugins/auth'
-import { getCookieOptions, requireEnv } from '../lib/env'
+import { getCookieOptions, requireEnv, getClientIp } from '../lib/env'
 
 const WEB_URL = requireEnv('VIANOVA_WEB_URL')
 
@@ -85,7 +85,7 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 
       // A conta nasce logada — a verificação de email não bloqueia o acesso,
       // só mantém o aviso na interface até o link ser confirmado.
-      const ip = request.headers.get('x-forwarded-for') ?? undefined
+      const ip = getClientIp(request)
       const userAgent = request.headers.get('user-agent') ?? undefined
       const { token: sessionToken } = await createSession(userId, ip, userAgent)
 
@@ -119,7 +119,7 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     '/login',
     async ({ body, set, cookie, request }) => {
       const { email, password, totpCode, challengeToken } = body
-      const ip = request.headers.get('x-forwarded-for') ?? undefined
+      const ip = getClientIp(request)
       const userAgent = request.headers.get('user-agent') ?? undefined
 
       let userId: string
