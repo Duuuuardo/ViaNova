@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
+import { parseApiError } from '../../lib/api-error'
 import { safeOidcRedirect, productSlugFromRedirect } from '../../lib/redirect'
 import { Button, ErrorNote } from '../../components/ui'
 import { RouteLine } from '../../components/brand'
@@ -40,8 +41,7 @@ function LoginPage() {
       const { data, error: apiError } = await api.auth.login.post({ email, password })
 
       if (apiError) {
-        const value = apiError.value as { message?: string }
-        setError(value?.message ?? 'Não foi possível entrar. Tente novamente.')
+        setError(parseApiError(apiError.value, 'Não foi possível entrar. Tente novamente.'))
         return
       }
 

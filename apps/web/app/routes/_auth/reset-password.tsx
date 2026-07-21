@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../lib/api'
+import { parseApiError } from '../../lib/api-error'
 import { Button, ErrorNote, Field } from '../../components/ui'
 
 export const Route = createFileRoute('/_auth/reset-password')({
@@ -28,9 +29,7 @@ function ResetPasswordPage() {
     try {
       const { error: apiError } = await api.auth['reset-password'].post({ token, password })
       if (apiError) {
-        setError(
-          (apiError.value as { message?: string })?.message ?? 'Link inválido ou expirado.',
-        )
+        setError(parseApiError(apiError.value, 'Link inválido ou expirado.'))
         return
       }
       router.navigate({ to: '/login', search: { redirect_uri: undefined } })

@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../lib/api'
+import { parseApiError } from '../../lib/api-error'
 import { safeOidcRedirect } from '../../lib/redirect'
 import { Button, ErrorNote } from '../../components/ui'
 
@@ -35,10 +36,7 @@ function RegisterPage() {
       const { error: apiError } = await api.auth.register.post({ name, email, password })
 
       if (apiError) {
-        setError(
-          (apiError.value as { message?: string })?.message ??
-            'Não foi possível criar a conta. Tente novamente.',
-        )
+        setError(parseApiError(apiError.value, 'Não foi possível criar a conta. Tente novamente.'))
         return
       }
 
