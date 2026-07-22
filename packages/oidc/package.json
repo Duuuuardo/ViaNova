@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@vianova/db": "workspace:*",
-    "drizzle-orm": "^0.44",
+    "drizzle-orm": "^0.45.2",
     "jose": "^6"
   },
   "devDependencies": {

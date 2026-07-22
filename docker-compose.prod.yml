@@ -79,7 +79,7 @@ services:
       - vianova-internal
 
   api:
-    image: ${REGISTRY}/vianova-api:latest
+    image: ${REGISTRY}/vianova-api:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
       - "127.0.0.1:5000:5000"
@@ -101,7 +101,7 @@ services:
         condition: service_completed_successfully
 
   web:
-    image: ${REGISTRY}/vianova-web:latest
+    image: ${REGISTRY}/vianova-web:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"
@@ -115,7 +115,7 @@ services:
       - api
 
   landing:
-    image: ${REGISTRY}/vianova-landing:latest
+    image: ${REGISTRY}/vianova-landing:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
       - "127.0.0.1:3300:3300"
@@ -131,7 +131,7 @@ services:
   # Config server: em produção fica apenas na rede interna e no loopback.
   # NUNCA adicione um server_name/config.vianova.software público para ele.
   config-server:
-    image: ${REGISTRY}/vianova-config-server:latest
+    image: ${REGISTRY}/vianova-config-server:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
       - "127.0.0.1:5100:5100"
@@ -148,7 +148,7 @@ services:
       - api
 
   email-worker:
-    image: ${REGISTRY}/vianova-email-worker:latest
+    image: ${REGISTRY}/vianova-email-worker:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file:
       - ./.env

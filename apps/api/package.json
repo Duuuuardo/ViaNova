@@ -19,10 +19,10 @@
     "@vianova/db": "workspace:*",
     "@vianova/oidc": "workspace:*",
     "bullmq": "5.80.2",
-    "drizzle-orm": "^0.44",
+    "drizzle-orm": "^0.45.2",
     "elysia": "^1",
     "logixlysia": "^6.6.0",
-    "nodemailer": "^6",
+    "nodemailer": "^9.0.3",
     "otpauth": "^9.5.1",
     "stripe": "^17"
   },
