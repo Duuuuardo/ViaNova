@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
 import { users } from './users'
 
 export const sessions = pgTable('sessions', {
@@ -10,6 +10,24 @@ export const sessions = pgTable('sessions', {
   userAgent: text('user_agent'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
+
+// Identifica um navegador confiável por um cookie aleatório e revogável. O token
+// nunca é persistido em claro; limpar os cookies faz o próximo acesso ser tratado
+// como um novo dispositivo.
+export const loginDevices = pgTable(
+  'login_devices',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    lastIp: text('last_ip'),
+    lastUserAgent: text('last_user_agent'),
+    lastLocationKey: text('last_location_key'),
+    firstSeenAt: timestamp('first_seen_at').defaultNow().notNull(),
+    lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('login_devices_user_token_hash_idx').on(t.userId, t.tokenHash)],
+)
 
 export const emailVerifications = pgTable('email_verifications', {
   id: text('id').primaryKey(),
@@ -52,6 +70,7 @@ export const loginChallenges = pgTable('login_challenges', {
 })
 
 export type Session = typeof sessions.$inferSelect
+export type LoginDevice = typeof loginDevices.$inferSelect
 export type EmailVerification = typeof emailVerifications.$inferSelect
 export type PasswordReset = typeof passwordResets.$inferSelect
 export type TotpSecret = typeof totpSecrets.$inferSelect

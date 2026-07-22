@@ -10,6 +10,19 @@ import { notifyUser } from '../lib/notifications'
 import { authPlugin } from '../plugins/auth'
 import { checkPasswordPolicy } from '../lib/password-policy'
 import { getCookieOptions, requireEnv, getClientIp } from '../lib/env'
+import {
+  abbreviateIp,
+  formatLoginAlertDescription,
+  getIpNetworkKey,
+  locateIp,
+  type ApproximateLocation,
+} from '../lib/geo-location'
+import {
+  LOGIN_DEVICE_COOKIE,
+  LOGIN_DEVICE_MAX_AGE,
+  recordLoginDevice,
+  updateLoginDeviceLocation,
+} from '../lib/login-device'
 
 const WEB_URL = requireEnv('VIANOVA_WEB_URL')
 
@@ -35,11 +48,39 @@ async function securityNotify(
         to: user.email,
         name: user.name,
         send: (email, name) => sendSecurityAlertEmail(email, name, title, description),
+        // Mudanças críticas de senha/2FA nunca são silenciadas. O alerta de
+        // novo dispositivo verifica a preferência antes de chamar esta função.
+        ignorePreference: true,
       },
     })
   } catch (err) {
     console.error('[security:notify]', err)
   }
+}
+
+async function notifyUnusualLogin(
+  userId: string,
+  location: ApproximateLocation | null,
+  ip?: string,
+  userAgent?: string,
+) {
+  const [user] = await db
+    .select({ securityAlerts: users.preferences })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  if (user?.securityAlerts?.securityAlerts === false) return
+
+  const shortIp = abbreviateIp(ip)
+  const description = formatLoginAlertDescription(location, ip)
+
+  await securityNotify(userId, 'Novo acesso à sua conta', description, {
+    ip,
+    abbreviatedIp: shortIp,
+    userAgent,
+    location,
+  })
 }
 
 export const authRoutes = new Elysia({ prefix: '/auth' })
@@ -100,6 +141,13 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         value: sessionToken,
         ...getCookieOptions(),
         maxAge: 60 * 60 * 24 * 30,
+      })
+
+      const loginDevice = await recordLoginDevice({ userId, ip, userAgent })
+      cookie[LOGIN_DEVICE_COOKIE].set({
+        value: loginDevice.token,
+        ...getCookieOptions(),
+        maxAge: LOGIN_DEVICE_MAX_AGE,
       })
 
       return {
@@ -227,15 +275,46 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         maxAge: 60 * 60 * 24 * 30,
       })
 
+      const currentDeviceToken = cookie[LOGIN_DEVICE_COOKIE]?.value as string | undefined
+      const loginDevice = await recordLoginDevice({
+        userId,
+        deviceToken: currentDeviceToken,
+        ip,
+        userAgent,
+      })
+      cookie[LOGIN_DEVICE_COOKIE].set({
+        value: loginDevice.token,
+        ...getCookieOptions(),
+        maxAge: LOGIN_DEVICE_MAX_AGE,
+      })
+
       const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
 
-      // Notifica o usuário sobre o novo acesso, mas não bloqueia o login.
-      securityNotify(
-        userId,
-        'Novo acesso à sua conta',
-        `Detectamos um novo login no seu endereço ${ip ?? 'desconhecido'}. Se não foi você, altere sua senha imediatamente.`,
-        { ip, userAgent },
-      ).catch(() => {})
+      // Geolocalização e notificação rodam fora do caminho crítico: até timeout,
+      // limite diário ou indisponibilidade do terceiro nunca atrasam o login.
+      const networkChanged = loginDevice.isNew || (
+        getIpNetworkKey(ip) !== getIpNetworkKey(loginDevice.previousIp ?? undefined)
+      )
+      const loginAlertsEnabled = user?.preferences?.securityAlerts !== false
+      if (networkChanged && loginAlertsEnabled) {
+        locateIp(ip).then(async (location) => {
+          if (location?.key) {
+            await updateLoginDeviceLocation(userId, loginDevice.token, location.key)
+          }
+          const locationChanged = Boolean(
+            location?.key &&
+            loginDevice.previousLocationKey &&
+            location.key !== loginDevice.previousLocationKey,
+          )
+          // Se o serviço gratuito estiver indisponível, a mudança de rede ainda
+          // gera o alerta fail-safe, apenas sem afirmar uma localização.
+          if (loginDevice.isNew || locationChanged || !location) {
+            await notifyUnusualLogin(userId, location, ip, userAgent)
+          }
+        }).catch((error) => {
+          console.error('[security:new-login]', error)
+        })
+      }
 
       return {
         user: {

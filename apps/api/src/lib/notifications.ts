@@ -20,6 +20,7 @@ interface NotifyOptions {
     to: string
     name: string
     send: (email: string, name: string) => Promise<void>
+    ignorePreference?: boolean
   }
 }
 
@@ -69,7 +70,7 @@ export async function notifyUser(options: NotifyOptions): Promise<Notification> 
   if (options.email) {
     try {
       const [user] = await db.select().from(users).where(eq(users.id, options.userId)).limit(1)
-      if (user && shouldEmail(user, options.type)) {
+      if (user && (options.email.ignorePreference || shouldEmail(user, options.type))) {
         await options.email.send(options.email.to, options.email.name)
         await db
           .update(notifications)

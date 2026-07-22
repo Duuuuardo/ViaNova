@@ -513,8 +513,8 @@ function ProfilePage() {
               <div className="pt-4">
                 <ToggleRow
                   id="security-alerts"
-                  label="Segurança e Monitoramento de Conta"
-                  hint="Avisos automáticos sobre novos dispositivos conectados, encerramentos de sessão e alterações de senha."
+                  label="Novos acessos à conta"
+                  hint="Receba um aviso no Vianova e por email quando um navegador ainda não reconhecido entrar na sua conta. Mudanças críticas de senha e 2FA continuam sendo informadas."
                   checked={preferences.securityAlerts}
                   onChange={(checked) => setPreferences({ ...preferences, securityAlerts: checked })}
                 />
