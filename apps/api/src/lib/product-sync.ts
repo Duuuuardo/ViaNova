@@ -34,11 +34,7 @@ async function postToProduct<T = unknown>(
       body: JSON.stringify(body),
     })
   } catch (err) {
-    // Milestone 1: nenhum produto expõe esses endpoints ainda — indisponível
-    // não é erro fatal, só registra. Quando o produto existir, 5xx abaixo
-    // aciona o retry da fila normalmente.
-    console.warn(`[product-sync] ${productSlug} indisponível em ${apiUrl}${path} (stub M1)`)
-    return { ok: false, status: 503 }
+    throw new Error(`[product-sync] ${productSlug} indisponível em ${apiUrl}${path}`, { cause: err })
   }
 
   // 4xx = o produto não implementa/reconhece o endpoint — retry não resolve.
@@ -48,8 +44,7 @@ async function postToProduct<T = unknown>(
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    console.warn(`[product-sync] ${productSlug}${path} respondeu ${res.status} — sem retry`)
-    return { ok: false, status: res.status, data: text }
+    throw new Error(`[product-sync] ${productSlug}${path} respondeu ${res.status}: ${text}`)
   }
 
   const data = (await res.json().catch(() => ({}))) as T
@@ -179,7 +174,8 @@ export async function syncEntitlements(productSlug: string, workspaceId: string)
   const resolved = await resolveWorkspaceLimits(productSlug, workspaceId)
   if (!resolved) return
 
-  await postToProduct(product.apiUrl, '/internal/entitlements', 'service:entitlements:write', productSlug, {
+  const apiUrl = productSlug === 'naia' ? (process.env.NAIA_API_URL ?? product.apiUrl) : product.apiUrl
+  await postToProduct(apiUrl, '/internal/entitlements', 'service:entitlements:write', productSlug, {
     workspace_id: workspaceId,
     product_slug: productSlug,
     tier: resolved.tier,
@@ -193,7 +189,8 @@ export async function syncEntitlements(productSlug: string, workspaceId: string)
 export async function grantCredits(productSlug: string, workspaceId: string, amount: number) {
   const product = await getProduct(productSlug)
   if (!product) return
-  await postToProduct(product.apiUrl, '/internal/credits/grant', 'service:entitlements:write', productSlug, {
+  const apiUrl = productSlug === 'naia' ? (process.env.NAIA_API_URL ?? product.apiUrl) : product.apiUrl
+  await postToProduct(apiUrl, '/internal/credits/grant', 'service:entitlements:write', productSlug, {
     workspace_id: workspaceId,
     product_slug: productSlug,
     amount,
@@ -205,7 +202,8 @@ export async function grantCredits(productSlug: string, workspaceId: string, amo
 export async function resetCredits(productSlug: string, workspaceId: string) {
   const product = await getProduct(productSlug)
   if (!product) return
-  await postToProduct(product.apiUrl, '/internal/credits/reset', 'service:entitlements:write', productSlug, {
+  const apiUrl = productSlug === 'naia' ? (process.env.NAIA_API_URL ?? product.apiUrl) : product.apiUrl
+  await postToProduct(apiUrl, '/internal/credits/reset', 'service:entitlements:write', productSlug, {
     workspace_id: workspaceId,
     product_slug: productSlug,
   })

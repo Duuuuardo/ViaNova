@@ -68,6 +68,31 @@ export const invoices = pgTable('invoices', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
+// Registro idempotente dos reembolsos recebidos do Stripe. O escopo vem da
+// metadata gravada pelo Vianova ao criar o refund; reembolsos externos sem
+// metadata nunca removem um add-on por inferência de valor.
+export const billingRefunds = pgTable('billing_refunds', {
+  id: text('id').primaryKey(),
+  stripeRefundId: text('stripe_refund_id').notNull().unique(),
+  stripeChargeId: text('stripe_charge_id').notNull(),
+  stripeInvoiceId: text('stripe_invoice_id'),
+  productSubscriptionId: text('product_subscription_id')
+    .references(() => productSubscriptions.id, { onDelete: 'set null' }),
+  scope: text('scope').$type<'subscription' | 'addon' | 'external'>().notNull(),
+  addonTypeId: text('addon_type_id').references(() => productAddonTypes.id, {
+    onDelete: 'set null',
+  }),
+  addonQuantity: integer('addon_quantity'),
+  addonQuantityAfter: integer('addon_quantity_after'),
+  amountCents: integer('amount_cents').notNull(),
+  currency: text('currency').notNull().default('brl'),
+  status: text('status').notNull(),
+  processedAt: timestamp('processed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
 export type ProductSubscription = typeof productSubscriptions.$inferSelect
 export type ProductSubscriptionAddon = typeof productSubscriptionAddons.$inferSelect
 export type Invoice = typeof invoices.$inferSelect
+export type BillingRefund = typeof billingRefunds.$inferSelect

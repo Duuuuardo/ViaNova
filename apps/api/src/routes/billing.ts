@@ -11,6 +11,8 @@ import {
   productSubscriptions,
   productSubscriptionAddons,
   invoices,
+  billingRefunds,
+  auditLogs,
 } from '@vianova/db'
 import type { ProductSubscription } from '@vianova/db'
 import { eq, and, or, inArray, notInArray } from 'drizzle-orm'
@@ -40,6 +42,7 @@ function hasActiveStripeSubscription(row: ProductSubscription): boolean {
 }
 
 const INTERNAL_SECRET = getRequiredSecret('VIANOVA_INTERNAL_SECRET')
+const INTERNAL_ADMIN_SECRET = getRequiredSecret('INTERNAL_ADMIN_SECRET')
 
 function verifyInternalSecret(headers: Record<string, string | undefined>) {
   return verifySecret(headers['x-internal-secret'], INTERNAL_SECRET)
@@ -205,6 +208,7 @@ async function getProductName(productSlug: string): Promise<string> {
 async function chargeAddonNow(
   stripe: Stripe,
   subRow: ProductSubscription,
+  addonTypeId: string,
   addonName: string,
   unitPriceCents: number,
   quantityDelta: number,
@@ -232,6 +236,14 @@ async function chargeAddonNow(
     // Sem isso, versões novas da API deixam o invoice item pendurado pra
     // próxima renovação em vez de cobrá-lo nesta fatura.
     pending_invoice_items_behavior: 'include',
+    metadata: {
+      subscriptionRowId: subRow.id,
+      productSlug: subRow.productSlug,
+      workspaceId: subRow.workspaceId,
+      billingScope: 'addon',
+      addonTypeId,
+      addonQuantity: String(quantityDelta),
+    },
   })
   await stripe.invoices.finalizeInvoice(invoice.id)
   try {
@@ -240,6 +252,127 @@ async function chargeAddonNow(
     // Cartão recusado: o webhook invoice.payment_failed avisa o dono.
   }
   return amount
+}
+
+async function findSubscriptionForRefund(
+  stripe: Stripe,
+  charge: Stripe.Charge,
+  refund: Stripe.Refund,
+): Promise<{ subRow: ProductSubscription | null; invoice: Stripe.Invoice | null }> {
+  let invoice: Stripe.Invoice | null = null
+  const invoiceId = typeof charge.invoice === 'string' ? charge.invoice : charge.invoice?.id
+  if (invoiceId) invoice = await stripe.invoices.retrieve(invoiceId)
+
+  const rowId = refund.metadata?.subscriptionRowId || invoice?.metadata?.subscriptionRowId
+  if (rowId) {
+    const [subRow] = await db
+      .select()
+      .from(productSubscriptions)
+      .where(eq(productSubscriptions.id, rowId))
+      .limit(1)
+    return { subRow: subRow ?? null, invoice }
+  }
+
+  const stripeSubId = typeof invoice?.subscription === 'string'
+    ? invoice.subscription
+    : invoice?.subscription?.id
+  if (!stripeSubId) return { subRow: null, invoice }
+  const [subRow] = await db
+    .select()
+    .from(productSubscriptions)
+    .where(eq(productSubscriptions.stripeSubscriptionId, stripeSubId))
+    .limit(1)
+  return { subRow: subRow ?? null, invoice }
+}
+
+async function processRefund(stripe: Stripe, charge: Stripe.Charge, refund: Stripe.Refund) {
+  if (refund.status !== 'succeeded') return
+
+  const { subRow, invoice } = await findSubscriptionForRefund(stripe, charge, refund)
+  const requestedScope = refund.metadata?.billingScope
+  const scope: 'subscription' | 'addon' | 'external' =
+    requestedScope === 'subscription' || requestedScope === 'addon' ? requestedScope : 'external'
+  const addonTypeId = scope === 'addon'
+    ? (refund.metadata?.addonTypeId || invoice?.metadata?.addonTypeId || null)
+    : null
+  const addonQuantityRaw = scope === 'addon'
+    ? (refund.metadata?.addonQuantity || invoice?.metadata?.addonQuantity)
+    : undefined
+  const addonQuantity = addonQuantityRaw ? Number(addonQuantityRaw) : null
+  const addonQuantityAfterRaw = scope === 'addon' ? refund.metadata?.addonQuantityAfter : undefined
+  const addonQuantityAfter = addonQuantityAfterRaw ? Number(addonQuantityAfterRaw) : null
+
+  const [refundRow] = await db
+    .insert(billingRefunds)
+    .values({
+      id: generateId(),
+      stripeRefundId: refund.id,
+      stripeChargeId: charge.id,
+      stripeInvoiceId: invoice?.id ?? null,
+      productSubscriptionId: subRow?.id ?? null,
+      scope,
+      addonTypeId,
+      addonQuantity: Number.isInteger(addonQuantity) ? addonQuantity : null,
+      addonQuantityAfter: Number.isInteger(addonQuantityAfter) ? addonQuantityAfter : null,
+      amountCents: refund.amount,
+      currency: refund.currency,
+      status: refund.status,
+    })
+    .onConflictDoUpdate({
+      target: billingRefunds.stripeRefundId,
+      set: { status: refund.status, updatedAt: new Date() },
+    })
+    .returning({ id: billingRefunds.id, processedAt: billingRefunds.processedAt })
+
+  // Eventos charge.refunded podem ser reenviados e incluem todos os refunds
+  // da charge. Cada refund só pode alterar entitlement uma vez.
+  if (!refundRow || refundRow.processedAt || !subRow) return
+
+  if (scope === 'addon' && addonTypeId && addonQuantity && addonQuantity > 0 && addonQuantityAfter !== null) {
+    const [addon] = await db
+      .select()
+      .from(productSubscriptionAddons)
+      .where(and(
+        eq(productSubscriptionAddons.productSubscriptionId, subRow.id),
+        eq(productSubscriptionAddons.addonTypeId, addonTypeId),
+      ))
+      .limit(1)
+
+    if (addon) {
+      const nextQuantity = Math.max(0, addonQuantityAfter)
+      if (addon.stripeSubscriptionItemId) {
+        if (nextQuantity === 0) {
+          await stripe.subscriptionItems.del(addon.stripeSubscriptionItemId, { proration_behavior: 'none' })
+        } else {
+          await stripe.subscriptionItems.update(addon.stripeSubscriptionItemId, {
+            quantity: nextQuantity,
+            proration_behavior: 'none',
+          })
+        }
+      }
+      if (nextQuantity === 0) {
+        await db.delete(productSubscriptionAddons).where(eq(productSubscriptionAddons.id, addon.id))
+      } else {
+        await db
+          .update(productSubscriptionAddons)
+          .set({ quantity: nextQuantity, updatedAt: new Date() })
+          .where(eq(productSubscriptionAddons.id, addon.id))
+      }
+      await enqueue({ type: 'entitlements:sync', productSlug: subRow.productSlug, workspaceId: subRow.workspaceId })
+    }
+  } else if (scope === 'subscription' || (scope === 'external' && charge.refunded)) {
+    if (subRow.stripeSubscriptionId) {
+      await stripe.subscriptions.cancel(subRow.stripeSubscriptionId).catch(() => {})
+    }
+    // customer.subscription.deleted fará o downgrade; o reset imediato evita
+    // consumo de créditos no intervalo entre os dois webhooks.
+    await enqueue({ type: 'credits:reset', productSlug: subRow.productSlug, workspaceId: subRow.workspaceId })
+  }
+
+  await db
+    .update(billingRefunds)
+    .set({ processedAt: new Date(), updatedAt: new Date() })
+    .where(eq(billingRefunds.id, refundRow.id))
 }
 
 // Numa subscription do Stripe, o item do plano é o único cujo price não
@@ -943,6 +1076,7 @@ export const billingRoutes = new Elysia()
       const chargedNowCents = await chargeAddonNow(
         stripe,
         subRow,
+        addonType.id,
         addonType.name,
         addonType.priceCents,
         quantityDelta,
@@ -1075,6 +1209,7 @@ export const billingRoutes = new Elysia()
           chargedNowCents = await chargeAddonNow(
             stripe,
             subRow,
+            addonType.id,
             addonType.name,
             addonType.priceCents,
             quantityDelta,
@@ -1410,6 +1545,21 @@ export const billingRoutes = new Elysia()
       }
     }
 
+    if (event.type === 'charge.refunded') {
+      const charge = event.data.object as Stripe.Charge
+      const refunds = await stripe.refunds.list({ charge: charge.id, limit: 100 })
+      for (const refund of refunds.data) {
+        try {
+          await processRefund(stripe, charge, refund)
+        } catch (err) {
+          // Responder 5xx faz o Stripe reenviar. A tabela de refunds garante
+          // que os itens já concluídos não sejam aplicados duas vezes.
+          console.error(`[billing:webhook] erro ao processar refund ${refund.id}:`, err)
+          throw err
+        }
+      }
+    }
+
     // Chargeback / disputa: cancela a subscription no Stripe e zera créditos.
     if (event.type === 'charge.dispute.created' || event.type === 'charge.dispute.funds_withdrawn') {
       const dispute = event.data.object as Stripe.Dispute
@@ -1449,12 +1599,17 @@ export const billingRoutes = new Elysia()
 
     if (event.type === 'invoice.paid' || event.type === 'invoice.payment_failed') {
       const invoice = event.data.object as Stripe.Invoice
-      const stripeSubId = invoice.subscription as string | null
-      if (stripeSubId) {
+      const stripeSubId = typeof invoice.subscription === 'string'
+        ? invoice.subscription
+        : invoice.subscription?.id
+      const subscriptionRowId = invoice.metadata?.subscriptionRowId
+      if (stripeSubId || subscriptionRowId) {
         const [subRow] = await db
           .select()
           .from(productSubscriptions)
-          .where(eq(productSubscriptions.stripeSubscriptionId, stripeSubId))
+          .where(subscriptionRowId
+            ? eq(productSubscriptions.id, subscriptionRowId)
+            : eq(productSubscriptions.stripeSubscriptionId, stripeSubId!))
           .limit(1)
 
         if (subRow) {
@@ -1575,6 +1730,152 @@ export const billingRoutes = new Elysia()
         owner_user_id: t.String(),
         organization_id: t.Optional(t.Union([t.String(), t.Null()])),
         free_eligible: t.Optional(t.Boolean()),
+      }),
+    },
+  )
+
+  // Operação administrativa de reembolso. O escopo explícito evita tentar
+  // adivinhar por valor se um refund parcial pertence ao plano ou a um add-on.
+  .post(
+    '/internal/admin/billing/refunds',
+    async ({ request, body, set }) => {
+      const provided = request.headers.get('authorization')?.replace(/^Bearer /, '')
+      if (!verifySecret(provided, INTERNAL_ADMIN_SECRET)) {
+        set.status = 401
+        return { message: 'Não autorizado.' }
+      }
+
+      const stripe = getStripe()
+      if (!stripe) {
+        set.status = 503
+        return { message: 'Stripe não configurado neste ambiente.' }
+      }
+
+      const [subRow] = await db
+        .select()
+        .from(productSubscriptions)
+        .where(eq(productSubscriptions.id, body.subscription_id))
+        .limit(1)
+      if (!subRow) {
+        set.status = 404
+        return { message: 'Assinatura não encontrada.' }
+      }
+
+      const invoice = await stripe.invoices.retrieve(body.invoice_id)
+      const invoiceShape = invoice as Stripe.Invoice & {
+        charge?: string | Stripe.Charge | null
+        payment_intent?: string | Stripe.PaymentIntent | null
+      }
+      const invoiceSubId = typeof invoice.subscription === 'string'
+        ? invoice.subscription
+        : invoice.subscription?.id
+      const belongsToSubscription =
+        invoice.metadata?.subscriptionRowId === subRow.id ||
+        invoiceSubId === subRow.stripeSubscriptionId
+      if (!belongsToSubscription) {
+        set.status = 400
+        return { message: 'A fatura não pertence a esta assinatura.' }
+      }
+
+      let addonTypeId: string | undefined
+      let addonQuantity: number | undefined
+      let addonQuantityAfter: number | undefined
+      let amount = 0
+      if (body.scope === 'addon') {
+        if (!body.addon_type_id || !body.quantity) {
+          set.status = 400
+          return { message: 'Add-on e quantidade são obrigatórios.' }
+        }
+        const [addon] = await db
+          .select({ row: productSubscriptionAddons, type: productAddonTypes })
+          .from(productSubscriptionAddons)
+          .innerJoin(productAddonTypes, eq(productSubscriptionAddons.addonTypeId, productAddonTypes.id))
+          .where(and(
+            eq(productSubscriptionAddons.productSubscriptionId, subRow.id),
+            eq(productSubscriptionAddons.addonTypeId, body.addon_type_id),
+          ))
+          .limit(1)
+        if (!addon || body.quantity > addon.row.quantity) {
+          set.status = 400
+          return { message: 'Quantidade de add-on inválida para esta assinatura.' }
+        }
+        addonTypeId = addon.type.id
+        addonQuantity = body.quantity
+        addonQuantityAfter = addon.row.quantity - body.quantity
+        amount = addon.type.priceCents * body.quantity
+      }
+
+      const chargeId = typeof invoiceShape.charge === 'string'
+        ? invoiceShape.charge
+        : invoiceShape.charge?.id
+      const paymentIntentId = typeof invoiceShape.payment_intent === 'string'
+        ? invoiceShape.payment_intent
+        : invoiceShape.payment_intent?.id
+      if (!chargeId && !paymentIntentId) {
+        set.status = 400
+        return { message: 'A fatura não possui uma cobrança reembolsável.' }
+      }
+
+      const charge = chargeId
+        ? await stripe.charges.retrieve(chargeId)
+        : await stripe.charges.list({ payment_intent: paymentIntentId!, limit: 1 }).then((r) => r.data[0])
+      if (!charge) {
+        set.status = 400
+        return { message: 'A cobrança da fatura não foi encontrada.' }
+      }
+      const refundableAmount = charge.amount - charge.amount_refunded
+      if (body.scope === 'subscription') amount = refundableAmount
+      if (amount <= 0 || amount > refundableAmount) {
+        set.status = 400
+        return { message: 'O valor solicitado não está disponível para reembolso nesta cobrança.' }
+      }
+
+      const refund = await stripe.refunds.create({
+        charge: charge.id,
+        amount,
+        reason: body.reason,
+        metadata: {
+          billingScope: body.scope,
+          subscriptionRowId: subRow.id,
+          productSlug: subRow.productSlug,
+          workspaceId: subRow.workspaceId,
+          ...(addonTypeId ? { addonTypeId } : {}),
+          ...(addonQuantity ? { addonQuantity: String(addonQuantity) } : {}),
+          ...(addonQuantityAfter !== undefined ? { addonQuantityAfter: String(addonQuantityAfter) } : {}),
+        },
+      })
+
+      await db.insert(auditLogs).values({
+        id: generateId(),
+        action: 'billing.refund.created',
+        resourceType: 'product_subscription',
+        resourceId: subRow.id,
+        metadata: {
+          stripeRefundId: refund.id,
+          stripeInvoiceId: invoice.id,
+          scope: body.scope,
+          amountCents: refund.amount,
+          addonTypeId: addonTypeId ?? null,
+          addonQuantity: addonQuantity ?? null,
+        },
+        ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+        userAgent: request.headers.get('user-agent'),
+      })
+
+      return { refundId: refund.id, status: refund.status, amountCents: refund.amount }
+    },
+    {
+      body: t.Object({
+        subscription_id: t.String(),
+        invoice_id: t.String(),
+        scope: t.Union([t.Literal('subscription'), t.Literal('addon')]),
+        addon_type_id: t.Optional(t.String()),
+        quantity: t.Optional(t.Number({ minimum: 1 })),
+        reason: t.Optional(t.Union([
+          t.Literal('duplicate'),
+          t.Literal('fraudulent'),
+          t.Literal('requested_by_customer'),
+        ])),
       }),
     },
   )

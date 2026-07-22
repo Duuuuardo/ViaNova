@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS "billing_refunds" (
+	"id" text PRIMARY KEY NOT NULL,
+	"stripe_refund_id" text NOT NULL,
+	"stripe_charge_id" text NOT NULL,
+	"stripe_invoice_id" text,
+	"product_subscription_id" text,
+	"scope" text NOT NULL,
+	"addon_type_id" text,
+	"addon_quantity" integer,
+	"addon_quantity_after" integer,
+	"amount_cents" integer NOT NULL,
+	"currency" text DEFAULT 'brl' NOT NULL,
+	"status" text NOT NULL,
+	"processed_at" timestamp,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "billing_refunds_stripe_refund_id_unique" UNIQUE("stripe_refund_id"),
+	CONSTRAINT "billing_refunds_product_subscription_id_product_subscriptions_id_fk" FOREIGN KEY ("product_subscription_id") REFERENCES "public"."product_subscriptions"("id") ON DELETE set null,
+	CONSTRAINT "billing_refunds_addon_type_id_product_addon_types_id_fk" FOREIGN KEY ("addon_type_id") REFERENCES "public"."product_addon_types"("id") ON DELETE set null
+);
