@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { Button, Card, ErrorNote, Field } from '../../../components/ui'
 import { createHeadConfig } from '../../../lib/seo'
+import { validateName } from '../../../lib/validation'
 
 export const Route = createFileRoute('/_app/organizations/')({ head: () => createHeadConfig('Organizações — Vianova'),
   component: OrganizationsPage,
@@ -20,6 +21,7 @@ function OrganizationsPage() {
   const [organizations, setOrganizations] = useState<Organization[] | null>(null)
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
+  const [nameError, setNameError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -34,6 +36,10 @@ function OrganizationsPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
+    const validNameError = validateName(name)
+    setNameError(validNameError)
+    if (validNameError) return
+
     setLoading(true)
     setError(null)
     try {
@@ -73,11 +79,20 @@ function OrganizationsPage() {
                 id="org-name"
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value)
+                  setNameError(null)
+                }}
+                onBlur={() => setNameError(validateName(name))}
+                aria-invalid={nameError ? true : undefined}
                 placeholder="Minha Empresa"
                 required
                 autoFocus
+                className={nameError ? 'border-red-400' : ''}
               />
+              {nameError && (
+                <span className="text-[11px] text-red-500 mt-1 block" role="alert">{nameError}</span>
+              )}
             </Field>
             {error && <ErrorNote>{error}</ErrorNote>}
             <div className="flex flex-col sm:flex-row gap-3">

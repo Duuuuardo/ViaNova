@@ -8,6 +8,7 @@ import { generateTotpSecret, getTotpUri, verifyTotp } from '../lib/totp'
 import { enqueue } from '../lib/queue'
 import { notifyUser } from '../lib/notifications'
 import { authPlugin } from '../plugins/auth'
+import { checkPasswordPolicy } from '../lib/password-policy'
 import { getCookieOptions, requireEnv, getClientIp } from '../lib/env'
 
 const WEB_URL = requireEnv('VIANOVA_WEB_URL')
@@ -48,6 +49,12 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     '/register',
     async ({ body, set, cookie, request }) => {
       const { name, email, password } = body
+
+      const policyError = checkPasswordPolicy(password)
+      if (policyError) {
+        set.status = 400
+        return { message: policyError }
+      }
 
       const existing = await db
         .select({ id: users.id })
@@ -108,9 +115,9 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     },
     {
       body: t.Object({
-        name: t.String({ minLength: 1 }),
-        email: t.String({ format: 'email' }),
-        password: t.String({ minLength: 8 }),
+        name: t.String({ minLength: 1, maxLength: 200 }),
+        email: t.String({ format: 'email', maxLength: 254 }),
+        password: t.String({ minLength: 8, maxLength: 128 }),
       }),
     },
   )
@@ -243,10 +250,11 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     },
     {
       body: t.Object({
-        email: t.Optional(t.String({ format: 'email' })),
-        password: t.Optional(t.String()),
-        totpCode: t.Optional(t.String()),
-        challengeToken: t.Optional(t.String()),
+        email: t.Optional(t.String({ format: 'email', maxLength: 254 })),
+        // Sem policy aqui: senhas antigas continuam válidas no login; o teto só barra payload abusivo.
+        password: t.Optional(t.String({ maxLength: 512 })),
+        totpCode: t.Optional(t.String({ maxLength: 64 })),
+        challengeToken: t.Optional(t.String({ maxLength: 512 })),
       }),
     },
   )
@@ -488,6 +496,12 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
   .post(
     '/reset-password',
     async ({ body, set }) => {
+      const policyError = checkPasswordPolicy(body.password)
+      if (policyError) {
+        set.status = 400
+        return { message: policyError }
+      }
+
       const tokenHash = hashToken(body.token)
       const now = new Date()
 
@@ -525,7 +539,7 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     {
       body: t.Object({
         token: t.String(),
-        password: t.String({ minLength: 8 }),
+        password: t.String({ minLength: 8, maxLength: 128 }),
       }),
     },
   )
@@ -666,6 +680,17 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         return { message: 'A senha atual está incorreta.' }
       }
 
+      const policyError = checkPasswordPolicy(body.newPassword)
+      if (policyError) {
+        set.status = 400
+        return { message: policyError }
+      }
+
+      if (body.newPassword === body.currentPassword) {
+        set.status = 400
+        return { message: 'A nova senha deve ser diferente da atual.' }
+      }
+
       const passwordHash = await Bun.password.hash(body.newPassword, 'argon2id')
       await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, session.userId))
 
@@ -675,8 +700,8 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     },
     {
       body: t.Object({
-        currentPassword: t.String(),
-        newPassword: t.String({ minLength: 8 }),
+        currentPassword: t.String({ maxLength: 512 }),
+        newPassword: t.String({ minLength: 8, maxLength: 128 }),
       }),
     },
   )

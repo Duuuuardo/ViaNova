@@ -23,6 +23,12 @@ function TwoFactorPage() {
     e.preventDefault()
     setError(null)
 
+    const trimmedCode = code.trim().replace(/\s+/g, '')
+    if (!trimmedCode) {
+      setError('Informe o código do app autenticador ou um código de backup.')
+      return
+    }
+
     const challengeToken = sessionStorage.getItem('2fa_challenge_token')
     if (!challengeToken) {
       router.navigate({ to: '/login', search: { redirect_uri } })
@@ -33,7 +39,7 @@ function TwoFactorPage() {
     try {
       const { data, error: apiError } = await api.auth.login.post({
         challengeToken,
-        totpCode: code,
+        totpCode: trimmedCode,
       })
 
       if (apiError || !data || !('user' in data)) {
@@ -70,10 +76,18 @@ function TwoFactorPage() {
             id="code"
             type="text"
             value={code}
-            onChange={(e) => setCode(e.target.value)}
+            onChange={(e) => {
+              setCode(e.target.value)
+              setError(null)
+            }}
+            onBlur={() => {
+              if (!code.trim()) setError('Informe o código do app autenticador ou um código de backup.')
+            }}
             placeholder="000000"
             required
             autoComplete="one-time-code"
+            inputMode="numeric"
+            maxLength={16}
             className="font-mono tracking-[0.3em]"
             autoFocus
           />

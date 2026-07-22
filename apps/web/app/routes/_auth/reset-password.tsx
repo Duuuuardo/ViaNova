@@ -2,7 +2,9 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../lib/api'
 import { parseApiError } from '../../lib/api-error'
+import { validateNewPassword } from '../../lib/validation'
 import { Button, ErrorNote, Field } from '../../components/ui'
+import { PasswordInput, PasswordStrengthMeter } from '../../components/password'
 import { createHeadConfig } from '../../lib/seo'
 
 export const Route = createFileRoute('/_auth/reset-password')({ head: () => createHeadConfig('Redefinir senha — Vianova'),
@@ -12,20 +14,32 @@ export const Route = createFileRoute('/_auth/reset-password')({ head: () => crea
   component: ResetPasswordPage,
 })
 
+type FieldErrors = { password?: string; confirm?: string }
+
 function ResetPasswordPage() {
   const router = useRouter()
   const { token } = Route.useSearch()
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setError(null)
     if (!token) {
       setError('Link inválido. Peça um novo link de redefinição.')
       return
     }
-    setError(null)
+
+    const errors: FieldErrors = {
+      password: validateNewPassword(password) ?? undefined,
+      confirm: password === confirm ? undefined : 'A confirmação não coincide com a nova senha.',
+    }
+    setFieldErrors(errors)
+    if (errors.password || errors.confirm) return
+
     setLoading(true)
     try {
       const { error: apiError } = await api.auth['reset-password'].post({ token, password })
@@ -34,6 +48,8 @@ function ResetPasswordPage() {
         return
       }
       router.navigate({ to: '/login', search: { redirect_uri: undefined } })
+    } catch {
+      setError('Não foi possível redefinir a senha. Tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -46,17 +62,37 @@ function ResetPasswordPage() {
         Crie uma nova senha para sua conta. Você será desconectado de todos os produtos.
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Nova senha" htmlFor="password" hint="No mínimo 8 caracteres.">
-          <input
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <Field label="Nova senha" htmlFor="password" error={fieldErrors.password}>
+          <PasswordInput
             id="password"
-            type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            onChange={(e) => {
+              setPassword(e.target.value)
+              setFieldErrors((f) => ({ ...f, password: undefined }))
+            }}
+            onBlur={() => setFieldErrors((f) => ({ ...f, password: validateNewPassword(password) ?? undefined }))}
+            placeholder="Mínimo 8 caracteres, com letras e números"
             required
-            minLength={8}
             autoComplete="new-password"
+            invalid={!!fieldErrors.password}
+          />
+          <PasswordStrengthMeter password={password} />
+        </Field>
+
+        <Field label="Confirmar nova senha" htmlFor="confirm" error={fieldErrors.confirm}>
+          <PasswordInput
+            id="confirm"
+            value={confirm}
+            onChange={(e) => {
+              setConfirm(e.target.value)
+              setFieldErrors((f) => ({ ...f, confirm: undefined }))
+            }}
+            onBlur={() => setFieldErrors((f) => ({ ...f, confirm: password === confirm ? undefined : 'A confirmação não coincide com a nova senha.' }))}
+            placeholder="Repita a nova senha"
+            required
+            autoComplete="new-password"
+            invalid={!!fieldErrors.confirm}
           />
         </Field>
 

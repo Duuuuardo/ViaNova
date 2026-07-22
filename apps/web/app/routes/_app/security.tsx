@@ -3,7 +3,10 @@ import { useState, useEffect } from 'react'
 import QRCode from 'react-qr-code'
 import { KeyRound, ShieldCheck, Smartphone, Laptop, LogOut, ShieldAlert, Check, X, AlertCircle } from 'lucide-react'
 import { api } from '../../lib/api'
+import { parseApiError } from '../../lib/api-error'
+import { validateNewPassword, validateTotpCode } from '../../lib/validation'
 import { Button, Card, ErrorNote, Field } from '../../components/ui'
+import { PasswordInput, PasswordStrengthMeter } from '../../components/password'
 import { createHeadConfig } from '../../lib/seo'
 
 export const Route = createFileRoute('/_app/security')({ head: () => createHeadConfig('Segurança — Vianova'),
@@ -185,6 +188,7 @@ function ChangePasswordSection() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<{ current?: string; new?: string; confirm?: string }>({})
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -194,14 +198,18 @@ function ChangePasswordSection() {
     setError(null)
     setSuccess(false)
 
-    if (newPassword.length < 8) {
-      setError('A nova senha deve ter no mínimo 8 caracteres.')
-      return
+    const errors = {
+      current: currentPassword ? undefined : 'Informe sua senha atual.',
+      new:
+        validateNewPassword(newPassword) ??
+        (newPassword === currentPassword && currentPassword
+          ? 'A nova senha deve ser diferente da atual.'
+          : undefined),
+      confirm:
+        newPassword === confirmPassword ? undefined : 'A nova senha e a confirmação não coincidem.',
     }
-    if (newPassword !== confirmPassword) {
-      setError('A nova senha e a confirmação não coincidem.')
-      return
-    }
+    setFieldErrors(errors)
+    if (errors.current || errors.new || errors.confirm) return
 
     setLoading(true)
     try {
@@ -211,7 +219,7 @@ function ChangePasswordSection() {
       })
 
       if (apiError || !data) {
-        setError(apiError?.value?.message ?? 'Não foi possível alterar a senha. Verifique sua senha atual.')
+        setError(parseApiError(apiError?.value, 'Não foi possível alterar a senha. Verifique sua senha atual.'))
         return
       }
 
@@ -220,6 +228,8 @@ function ChangePasswordSection() {
       setNewPassword('')
       setConfirmPassword('')
       setTimeout(() => setSuccess(false), 4000)
+    } catch {
+      setError('Não foi possível alterar a senha. Tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -234,40 +244,52 @@ function ChangePasswordSection() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
-        <Field label="Senha atual" htmlFor="current-password">
-          <input
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-md" noValidate>
+        <Field label="Senha atual" htmlFor="current-password" error={fieldErrors.current}>
+          <PasswordInput
             id="current-password"
-            type="password"
             value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
+            onChange={(e) => {
+              setCurrentPassword(e.target.value)
+              setFieldErrors((f) => ({ ...f, current: undefined }))
+            }}
             required
-            className="w-full"
+            autoComplete="current-password"
             placeholder="••••••••"
+            invalid={!!fieldErrors.current}
           />
         </Field>
 
-        <Field label="Nova senha" htmlFor="new-password">
-          <input
+        <Field label="Nova senha" htmlFor="new-password" error={fieldErrors.new}>
+          <PasswordInput
             id="new-password"
-            type="password"
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
+            onChange={(e) => {
+              setNewPassword(e.target.value)
+              setFieldErrors((f) => ({ ...f, new: undefined }))
+            }}
+            onBlur={() => setFieldErrors((f) => ({ ...f, new: validateNewPassword(newPassword) ?? undefined }))}
             required
-            className="w-full"
-            placeholder="Mínimo de 8 caracteres"
+            autoComplete="new-password"
+            placeholder="Mínimo 8 caracteres, com letras e números"
+            invalid={!!fieldErrors.new}
           />
+          <PasswordStrengthMeter password={newPassword} />
         </Field>
 
-        <Field label="Confirmar nova senha" htmlFor="confirm-password">
-          <input
+        <Field label="Confirmar nova senha" htmlFor="confirm-password" error={fieldErrors.confirm}>
+          <PasswordInput
             id="confirm-password"
-            type="password"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value)
+              setFieldErrors((f) => ({ ...f, confirm: undefined }))
+            }}
+            onBlur={() => setFieldErrors((f) => ({ ...f, confirm: newPassword === confirmPassword ? undefined : 'A nova senha e a confirmação não coincidem.' }))}
             required
-            className="w-full"
+            autoComplete="new-password"
             placeholder="Repita a nova senha"
+            invalid={!!fieldErrors.confirm}
           />
         </Field>
 
@@ -317,8 +339,14 @@ function SessionsSection() {
     setRevoking(true)
     setError(null)
     try {
-      await api.auth.sessions['revoke-all'].post()
+      const { error: apiError } = await api.auth.sessions['revoke-all'].post()
+      if (apiError) {
+        setError('Não foi possível encerrar as outras sessões. Tente novamente.')
+        return
+      }
       await loadSessions()
+    } catch {
+      setError('Não foi possível encerrar as outras sessões. Tente novamente.')
     } finally {
       setRevoking(false)
     }
@@ -330,7 +358,7 @@ function SessionsSection() {
     try {
       const { error: apiError } = await api.auth.sessions({ id }).delete()
       if (apiError) {
-        setError(apiError?.value?.message ?? 'Não foi possível encerrar esta sessão.')
+        setError(parseApiError(apiError?.value, 'Não foi possível encerrar esta sessão.'))
         return
       }
       await loadSessions()
@@ -442,10 +470,15 @@ function EnableTwoFactor() {
 
   async function confirmCode(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
     setError(null)
+    const codeError = validateTotpCode(code)
+    if (codeError) {
+      setError(codeError)
+      return
+    }
+    setLoading(true)
     try {
-      const { data, error: apiError } = await api.auth['2fa'].enable.post({ code })
+      const { data, error: apiError } = await api.auth['2fa'].enable.post({ code: code.trim() })
       if (apiError || !data?.backupCodes) {
         setError('Código inválido. Verifique seu aplicativo autenticador e tente novamente.')
         return
@@ -497,6 +530,8 @@ function EnableTwoFactor() {
               onChange={(e) => setCode(e.target.value)}
               placeholder="000000"
               required
+              inputMode="numeric"
+              maxLength={6}
               className="font-mono tracking-[0.3em] max-w-44 text-center text-lg h-11"
               autoComplete="one-time-code"
             />
@@ -538,10 +573,15 @@ function DisableTwoFactor() {
 
   async function handleDisable(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
     setError(null)
+    const trimmedCode = code.trim().replace(/\s+/g, '')
+    if (!trimmedCode) {
+      setError('Informe o código do app autenticador ou um código de backup.')
+      return
+    }
+    setLoading(true)
     try {
-      const { error: apiError } = await api.auth['2fa'].disable.post({ code })
+      const { error: apiError } = await api.auth['2fa'].disable.post({ code: trimmedCode })
       if (apiError) {
         setError('Código inválido. Verifique o aplicativo autenticador.')
         return
@@ -598,7 +638,7 @@ function DeleteAccountModal({ onClose, onSuccess }: { onClose: () => void; onSuc
     try {
       const { data, error: apiError } = await api.auth['delete-account'].post({ password: password || undefined })
       if (apiError || !data) {
-        setError(apiError?.value?.message ?? 'A senha informada está incorreta.')
+        setError(parseApiError(apiError?.value, 'A senha informada está incorreta.'))
         return
       }
       onSuccess()

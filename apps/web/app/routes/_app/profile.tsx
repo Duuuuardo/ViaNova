@@ -20,6 +20,7 @@ import { api } from '../../lib/api'
 import { Button, Card, ErrorNote, Field, SectionTitle, StatusDot, ToggleRow } from '../../components/ui'
 import { Avatar, type AvatarFrame } from '../../components/avatar'
 import { createHeadConfig } from '../../lib/seo'
+import { validateName } from '../../lib/validation'
 
 export const Route = createFileRoute('/_app/profile')({ head: () => createHeadConfig('Perfil — Vianova'),
   component: ProfilePage,
@@ -53,6 +54,7 @@ function ProfilePage() {
 
   // Personal data
   const [name, setName] = useState(user.name)
+  const [nameError, setNameError] = useState<string | null>(null)
   const [phone, setPhone] = useState(user.phone ?? '')
   const [jobTitle, setJobTitle] = useState((user as Record<string, any>).jobTitle ?? '')
   const [department, setDepartment] = useState((user as Record<string, any>).department ?? '')
@@ -103,6 +105,13 @@ function ProfilePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const validNameError = validateName(name)
+    setNameError(validNameError)
+    if (validNameError) {
+      setActiveTab('general')
+      return
+    }
+
     setError(null)
     setSaved(false)
     setLoading(true)
@@ -321,10 +330,18 @@ function ProfilePage() {
                     id="name"
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value)
+                      setNameError(null)
+                    }}
+                    onBlur={() => setNameError(validateName(name))}
+                    aria-invalid={nameError ? true : undefined}
                     required
-                    className="w-full"
+                    className={`w-full ${nameError ? 'border-red-400' : ''}`}
                   />
+                  {nameError && (
+                    <span className="text-[11px] text-red-500 mt-1 block" role="alert">{nameError}</span>
+                  )}
                 </Field>
 
                 <Field label="Telefone / WhatsApp" htmlFor="phone">

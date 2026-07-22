@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../lib/api'
-import { Button, Field } from '../../components/ui'
+import { validateEmail } from '../../lib/validation'
+import { Button, ErrorNote, Field } from '../../components/ui'
 import { createHeadConfig } from '../../lib/seo'
 
 export const Route = createFileRoute('/_auth/forgot-password')({ head: () => createHeadConfig('Esqueci minha senha — Vianova'),
@@ -10,15 +11,28 @@ export const Route = createFileRoute('/_auth/forgot-password')({ head: () => cre
 
 function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
+  const [fieldError, setFieldError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setError(null)
+    const emailError = validateEmail(email)
+    setFieldError(emailError)
+    if (emailError) return
+
     setLoading(true)
     try {
-      await api.auth['forgot-password'].post({ email })
+      const { error: apiError } = await api.auth['forgot-password'].post({ email: email.trim() })
+      if (apiError) {
+        setError('Não foi possível enviar o link. Tente novamente em instantes.')
+        return
+      }
       setSent(true)
+    } catch {
+      setError('Não foi possível enviar o link. Verifique sua conexão e tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -46,18 +60,25 @@ function ForgotPasswordPage() {
         Digite seu email e enviaremos um link para criar uma nova senha.
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Email" htmlFor="email">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <Field label="Email" htmlFor="email" error={fieldError}>
           <input
             id="email"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              setFieldError(null)
+            }}
+            onBlur={() => setFieldError(validateEmail(email))}
             placeholder="voce@empresa.com"
             required
             autoComplete="email"
+            aria-invalid={fieldError ? true : undefined}
           />
         </Field>
+
+        {error && <ErrorNote>{error}</ErrorNote>}
 
         <Button type="submit" className="w-full" loading={loading}>
           Enviar link

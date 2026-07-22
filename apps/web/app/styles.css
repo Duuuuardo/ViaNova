@@ -30,6 +30,10 @@
       focus:border-via-600 focus:ring-2 focus:ring-via-100;
   }
 
+  input[aria-invalid='true'] {
+    @apply border-danger-600/60 focus:border-danger-600 focus:ring-danger-50;
+  }
+
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-via-600;
   }

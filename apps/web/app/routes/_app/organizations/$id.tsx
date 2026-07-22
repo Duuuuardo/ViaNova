@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { Button, Card, ErrorNote, Field, SectionTitle } from '../../../components/ui'
 import { createHeadConfig } from '../../../lib/seo'
+import { validateEmail } from '../../../lib/validation'
 
 export const Route = createFileRoute('/_app/organizations/$id')({ head: () => createHeadConfig('Organização — Vianova'),
   component: OrganizationDetailPage,
@@ -28,6 +29,7 @@ function OrganizationDetailPage() {
   const [detail, setDetail] = useState<OrgDetail | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
+  const [emailError, setEmailError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -63,6 +65,10 @@ function OrganizationDetailPage() {
 
   async function handleAddMember(e: React.FormEvent) {
     e.preventDefault()
+    const validEmailError = validateEmail(inviteEmail)
+    setEmailError(validEmailError)
+    if (validEmailError) return
+
     setLoading(true)
     setError(null)
     try {
@@ -150,10 +156,19 @@ function OrganizationDetailPage() {
                     id="invite-email"
                     type="email"
                     value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
+                    onChange={(e) => {
+                      setInviteEmail(e.target.value)
+                      setEmailError(null)
+                    }}
+                    onBlur={() => setEmailError(validateEmail(inviteEmail))}
+                    aria-invalid={emailError ? true : undefined}
                     placeholder="pessoa@empresa.com"
                     required
+                    className={emailError ? 'border-red-400' : ''}
                   />
+                  {emailError && (
+                    <span className="text-[11px] text-red-500 mt-1 block" role="alert">{emailError}</span>
+                  )}
                 </Field>
               </div>
               <Button type="submit" variant="secondary" loading={loading} className="mb-0 sm:mb-6 w-full sm:w-auto">

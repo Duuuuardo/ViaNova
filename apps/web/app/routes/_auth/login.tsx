@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { parseApiError } from '../../lib/api-error'
 import { getSession } from '../../lib/auth'
+import { validateEmail } from '../../lib/validation'
 import { safeOidcRedirect, productSlugFromRedirect } from '../../lib/redirect'
-import { Button, ErrorNote } from '../../components/ui'
+import { Button, ErrorNote, Field } from '../../components/ui'
+import { PasswordInput } from '../../components/password'
 import { RouteLine } from '../../components/brand'
 import { createHeadConfig } from '../../lib/seo'
 
@@ -19,17 +21,24 @@ export const Route = createFileRoute('/_auth/login')({
     const user = await getSession()
     if (!user) return
     const oidcRedirect = safeOidcRedirect(search.redirect_uri)
-    throw redirect(oidcRedirect ? { href: oidcRedirect } : { to: '/' })
+    if (oidcRedirect) {
+      // Redirecionamento externo (OIDC) — não passa pelo router
+      if (typeof window !== 'undefined') window.location.href = oidcRedirect
+      throw redirect({ to: '/' })
+    }
+    throw redirect({ to: '/' })
   },
   component: LoginPage,
 })
+
+type FieldErrors = { email?: string; password?: string }
 
 function LoginPage() {
   const router = useRouter()
   const { redirect_uri } = Route.useSearch()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [destination, setDestination] = useState<string | null>(null)
@@ -43,13 +52,23 @@ function LoginPage() {
     })
   }, [redirect_uri])
 
+  function validate(): boolean {
+    const errors: FieldErrors = {
+      email: validateEmail(email) ?? undefined,
+      password: password ? undefined : 'Informe sua senha.',
+    }
+    setFieldErrors(errors)
+    return !errors.email && !errors.password
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!validate()) return
     setLoading(true)
 
     try {
-      const { data, error: apiError } = await api.auth.login.post({ email, password })
+      const { data, error: apiError } = await api.auth.login.post({ email: email.trim(), password })
 
       if (apiError) {
         setError(parseApiError(apiError.value, 'Não foi possível entrar. Tente novamente.'))
@@ -101,18 +120,22 @@ function LoginPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-        <div>
-          <label htmlFor="email">Email</label>
+        <Field label="Email" htmlFor="email" error={fieldErrors.email}>
           <input
             id="email"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              if (fieldErrors.email) setFieldErrors((f) => ({ ...f, email: undefined }))
+            }}
+            onBlur={() => setFieldErrors((f) => ({ ...f, email: validateEmail(email) ?? undefined }))}
             placeholder="voce@empresa.com"
             required
             autoComplete="email"
+            aria-invalid={fieldErrors.email ? true : undefined}
           />
-        </div>
+        </Field>
 
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -124,37 +147,24 @@ function LoginPage() {
               Esqueceu a senha?
             </Link>
           </div>
-          <div className="relative">
-            <input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              autoComplete="current-password"
-              className="pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-700 transition-colors"
-              aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-            >
-              {showPassword ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              )}
-            </button>
-          </div>
+          <PasswordInput
+            id="password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value)
+              if (fieldErrors.password) setFieldErrors((f) => ({ ...f, password: undefined }))
+            }}
+            onBlur={() => setFieldErrors((f) => ({ ...f, password: password ? undefined : 'Informe sua senha.' }))}
+            placeholder="••••••••"
+            required
+            autoComplete="current-password"
+            invalid={!!fieldErrors.password}
+          />
+          {fieldErrors.password && (
+            <p className="mt-1 text-xs text-danger-600" role="alert">
+              {fieldErrors.password}
+            </p>
+          )}
         </div>
 
         {error && <ErrorNote>{error}</ErrorNote>}

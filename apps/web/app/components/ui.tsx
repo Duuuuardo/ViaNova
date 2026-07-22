@@ -59,17 +59,25 @@ export function Field({
   htmlFor,
   children,
   hint,
+  error,
 }: {
   label: string
   htmlFor: string
   children: ReactNode
   hint?: string
+  error?: string | null
 }) {
   return (
     <div>
       <label htmlFor={htmlFor}>{label}</label>
       {children}
-      {hint && <p className="mt-1 text-xs text-ink-500">{hint}</p>}
+      {error ? (
+        <p className="mt-1 text-xs text-danger-600" role="alert">
+          {error}
+        </p>
+      ) : (
+        hint && <p className="mt-1 text-xs text-ink-500">{hint}</p>
+      )}
     </div>
   )
 }
