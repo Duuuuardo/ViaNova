@@ -19,6 +19,9 @@ export const productSubscriptions = pgTable(
       onDelete: 'set null',
     }),
     ownerUserId: text('owner_user_id').references(() => users.id),
+    // Elegibilidade vitalícia concedida pelo produto. Registrar um workspace
+    // no billing não significa que ele pode ativar o plano grátis.
+    freeEligible: boolean('free_eligible').notNull().default(true),
     planId: text('plan_id').references(() => productPlans.id),
     stripeCustomerId: text('stripe_customer_id'),
     stripeSubscriptionId: text('stripe_subscription_id'),

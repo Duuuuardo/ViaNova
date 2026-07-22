@@ -53,6 +53,7 @@ async function ensureFreeSubscription(data: {
   workspaceName?: string | null
   ownerUserId: string
   organizationId?: string | null
+  freeEligible: boolean
 }) {
   const [existing] = await db
     .select()
@@ -84,16 +85,19 @@ async function ensureFreeSubscription(data: {
       workspaceName: data.workspaceName ?? null,
       organizationId: data.organizationId ?? null,
       ownerUserId: data.ownerUserId,
+      freeEligible: data.freeEligible,
       planId: freePlan.id,
-      status: 'active',
+      status: data.freeEligible ? 'active' : 'inactive',
     })
     .returning()
 
-  await enqueue({
-    type: 'entitlements:sync',
-    productSlug: data.productSlug,
-    workspaceId: data.workspaceId,
-  })
+  if (data.freeEligible) {
+    await enqueue({
+      type: 'entitlements:sync',
+      productSlug: data.productSlug,
+      workspaceId: data.workspaceId,
+    })
+  }
 
   return sub
 }
@@ -552,6 +556,11 @@ export const billingRoutes = new Elysia()
       // Plano grátis: com assinatura paga ativa, vira downgrade agendado —
       // o plano pago permanece até o fim do período já cobrado.
       if (plan.priceCents === 0) {
+        if (!subRow.freeEligible) {
+          set.status = 403
+          return { message: 'O plano grátis já foi usado por esta conta. Escolha um plano pago para este workspace.' }
+        }
+
         if (hasActiveStripeSubscription(subRow)) {
           if (!stripe) {
             set.status = 503
@@ -1549,6 +1558,7 @@ export const billingRoutes = new Elysia()
           workspaceName: body.workspace_name,
           ownerUserId: body.owner_user_id,
           organizationId: body.organization_id,
+          freeEligible: body.free_eligible ?? true,
         })
         return { subscriptionId: sub.id, status: sub.status }
       } catch (err) {
@@ -1564,6 +1574,7 @@ export const billingRoutes = new Elysia()
         workspace_name: t.Optional(t.String()),
         owner_user_id: t.String(),
         organization_id: t.Optional(t.Union([t.String(), t.Null()])),
+        free_eligible: t.Optional(t.Boolean()),
       }),
     },
   )

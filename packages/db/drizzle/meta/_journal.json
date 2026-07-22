@@ -64,6 +64,13 @@
       "when": 1784702339913,
       "tag": "0008_romantic_black_bird",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784733594000,
+      "tag": "0009_free_subscription_eligibility",
+      "breakpoints": true
     }
   ]
 }
