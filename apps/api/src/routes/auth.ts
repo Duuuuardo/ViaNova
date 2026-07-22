@@ -5,7 +5,7 @@ import { generateId, generateToken, hashToken, generateBackupCodes } from '../li
 import { createSession, deleteSession, deleteAllUserSessions, SESSION_COOKIE, createLoginChallenge, validateLoginChallenge } from '../lib/session'
 import { sendVerificationEmail, sendPasswordResetEmail, sendSecurityAlertEmail } from '../lib/email'
 import { generateTotpSecret, getTotpUri, verifyTotp } from '../lib/totp'
-import { enqueue } from '../lib/queue'
+import { notifySessionRevoked } from '../lib/product-sync'
 import { notifyUser } from '../lib/notifications'
 import { authPlugin } from '../plugins/auth'
 import { checkPasswordPolicy } from '../lib/password-policy'
@@ -271,11 +271,9 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
       // Single sign-out imediato: derruba a sessão nos produtos via webhook de
       // revogação; a introspection também passa a responder active: false.
       if (deletedSessionId) {
-        await enqueue({
-          type: 'session:revoked',
-          userId: session.userId,
-          sessionIds: [deletedSessionId],
-        })
+        // Revogação de sessão não pode esperar a fila: o produto precisa
+        // rejeitar o JWT antes de esta resposta de logout terminar.
+        await notifySessionRevoked(session.userId, [deletedSessionId])
       }
     }
 
@@ -529,7 +527,7 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 
       const revokedSessionIds = await deleteAllUserSessions(reset.userId)
       if (revokedSessionIds.length > 0) {
-        await enqueue({ type: 'session:revoked', userId: reset.userId, sessionIds: revokedSessionIds })
+        await notifySessionRevoked(reset.userId, revokedSessionIds)
       }
 
       await securityNotify(reset.userId, 'Senha redefinida', 'A senha da sua conta Vianova foi redefinida por meio do link de recuperação. Todas as sessões ativas foram encerradas.')
@@ -737,9 +735,14 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
       return { message: 'Não autenticado.' }
     }
 
-    await db
+    const revoked = await db
       .delete(sessions)
       .where(and(eq(sessions.userId, session.userId), ne(sessions.id, session.sessionId)))
+      .returning({ id: sessions.id })
+
+    if (revoked.length > 0) {
+      await notifySessionRevoked(session.userId, revoked.map(({ id }) => id))
+    }
 
     return { message: 'Todas as outras sessões foram encerradas.' }
   })
@@ -757,9 +760,14 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         return { message: 'Não é possível encerrar sua sessão atual por este botão.' }
       }
 
-      await db
+      const [revoked] = await db
         .delete(sessions)
         .where(and(eq(sessions.id, params.id), eq(sessions.userId, session.userId)))
+        .returning({ id: sessions.id })
+
+      if (revoked) {
+        await notifySessionRevoked(session.userId, [revoked.id])
+      }
 
       return { message: 'Sessão encerrada com sucesso.' }
     },

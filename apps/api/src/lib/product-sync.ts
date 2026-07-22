@@ -221,9 +221,14 @@ export async function notifySessionRevoked(userId: string, sessionIds: string[])
     .where(eq(productCatalog.isActive, true))
 
   for (const product of products) {
-    await postToProduct(product.apiUrl, '/internal/session-revoked', 'service:sessions:revoke', product.slug, {
-      user_id: userId,
-      session_ids: sessionIds,
-    })
+    // Um produto indisponível não pode impedir a revogação nos demais.
+    try {
+      await postToProduct(product.apiUrl, '/internal/session-revoked', 'service:sessions:revoke', product.slug, {
+        user_id: userId,
+        session_ids: sessionIds,
+      })
+    } catch (err) {
+      console.error(`[product-sync] falha ao revogar sessões em ${product.slug}:`, err)
+    }
   }
 }

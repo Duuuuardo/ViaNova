@@ -3,11 +3,11 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { db, productCatalog, oidcAuthCodes, oidcRefreshTokens, users, sessions } from '@vianova/db'
 import { eq, and, gt, isNull } from 'drizzle-orm'
 import { getJwks, signUserToken, introspectToken } from '@vianova/oidc'
+import { notifySessionRevoked } from '../lib/product-sync'
 import { generateId, generateToken, hashToken } from '../lib/crypto'
 import { authPlugin } from '../plugins/auth'
 import { getCookieOptions, requireEnv } from '../lib/env'
 import { deleteSession, SESSION_COOKIE } from '../lib/session'
-import { enqueue } from '../lib/queue'
 
 const AUTH_CODE_TTL_MS = 60 * 1000 // uso único, vida curta
 const REFRESH_TOKEN_TTL_DAYS = 30
@@ -357,11 +357,9 @@ export const oidcRoutes = new Elysia()
         if (token) {
           const deletedSessionId = await deleteSession(token)
           if (deletedSessionId) {
-            await enqueue({
-              type: 'session:revoked',
-              userId: session.userId,
-              sessionIds: [deletedSessionId],
-            })
+            // Logout iniciado pelo produto também é logout global. Não use a
+            // fila aqui: ela só serve para trabalho eventual, não revogação.
+            await notifySessionRevoked(session.userId, [deletedSessionId])
           }
         }
         cookie[SESSION_COOKIE].set({ value: '', maxAge: 0, path: '/' })
