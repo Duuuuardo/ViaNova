@@ -1,7 +1,8 @@
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../lib/api'
 import { parseApiError } from '../../lib/api-error'
+import { getSession } from '../../lib/auth'
 import { safeOidcRedirect } from '../../lib/redirect'
 import { Button, ErrorNote } from '../../components/ui'
 import { createHeadConfig } from '../../lib/seo'
@@ -11,6 +12,13 @@ export const Route = createFileRoute('/_auth/register')({
   validateSearch: (search: Record<string, unknown>) => ({
     redirect_uri: typeof search.redirect_uri === 'string' ? search.redirect_uri : undefined,
   }),
+  // Já logado não deve ver o cadastro. Completa o OIDC se houver, senão vai pra conta.
+  beforeLoad: async ({ search }) => {
+    const user = await getSession()
+    if (!user) return
+    const oidcRedirect = safeOidcRedirect(search.redirect_uri)
+    throw redirect(oidcRedirect ? { href: oidcRedirect } : { to: '/' })
+  },
   component: RegisterPage,
 })
 
