@@ -2,7 +2,7 @@ name: Deploy Vianova
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -69,7 +69,9 @@ jobs:
           script: |
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             cd /opt/vianova
-            git pull
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             # SECURITY: avoid `docker system prune -f` in automated deploys — it can
