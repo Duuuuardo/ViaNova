@@ -219,7 +219,7 @@ export function ToggleRow({
           htmlFor={id}
           onClick={(e) => e.preventDefault()}
           className={`mb-0 flex items-center gap-1.5 text-sm font-semibold text-ink-900 transition-colors duration-150 ${
-            disabled ? 'cursor-not-allowed' : 'cursor-pointer group-hover/row:text-via-950 dark:group-hover/row:text-white'
+            disabled ? 'cursor-not-allowed' : 'cursor-pointer group-hover/row:text-via-700'
           }`}
         >
           {label}
@@ -244,4 +244,3 @@ export function ToggleRow({
     </div>
   )
 }
-
