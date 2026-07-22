@@ -22,9 +22,9 @@ export const Route = createFileRoute('/_auth/login')({
     if (!user) return
     const oidcRedirect = safeOidcRedirect(search.redirect_uri)
     if (oidcRedirect) {
-      // Redirecionamento externo (OIDC) — não passa pelo router
-      if (typeof window !== 'undefined') window.location.href = oidcRedirect
-      throw redirect({ to: '/' })
+      // Funciona tanto no SSR quanto no browser. O fallback anterior mandava
+      // usuários já autenticados para a home durante uma navegação server-side.
+      throw redirect({ href: oidcRedirect })
     }
     throw redirect({ to: '/' })
   },

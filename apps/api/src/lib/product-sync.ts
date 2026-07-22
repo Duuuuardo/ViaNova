@@ -223,7 +223,13 @@ export async function notifySessionRevoked(userId: string, sessionIds: string[])
   for (const product of products) {
     // Um produto indisponível não pode impedir a revogação nos demais.
     try {
-      await postToProduct(product.apiUrl, '/internal/session-revoked', 'service:sessions:revoke', product.slug, {
+      // O catálogo pode ter sido criado antes de uma mudança de domínio. Para
+      // o Campaigns, a URL de ambiente do deploy tem precedência no caminho
+      // crítico de logout; o seed também passa a reconciliar esse campo.
+      const apiUrl = product.slug === 'naia'
+        ? (process.env.NAIA_API_URL ?? product.apiUrl)
+        : product.apiUrl
+      await postToProduct(apiUrl, '/internal/session-revoked', 'service:sessions:revoke', product.slug, {
         user_id: userId,
         session_ids: sessionIds,
       })

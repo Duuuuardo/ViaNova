@@ -20,8 +20,7 @@ export const Route = createFileRoute('/_auth/register')({
     if (!user) return
     const oidcRedirect = safeOidcRedirect(search.redirect_uri)
     if (oidcRedirect) {
-      if (typeof window !== 'undefined') window.location.href = oidcRedirect
-      throw redirect({ to: '/' })
+      throw redirect({ href: oidcRedirect })
     }
     throw redirect({ to: '/' })
   },

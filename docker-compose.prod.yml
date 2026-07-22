@@ -111,6 +111,8 @@ services:
           - vianova-web
     env_file:
       - ./.env
+    environment:
+      - VIANOVA_API_INTERNAL_URL=http://vianova-api:5000
     depends_on:
       - api
 

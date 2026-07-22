@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
@@ -36,6 +37,11 @@ const TermsRoute = TermsRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogoutRoute = LogoutRouteImport.update({
+  id: '/logout',
+  path: '/logout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -119,6 +125,7 @@ const AppOrganizationsIdRoute = AppOrganizationsIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/logout': typeof LogoutRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/billing': typeof AppBillingRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
+  '/logout': typeof LogoutRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/billing': typeof AppBillingRoute
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/_auth': typeof AuthRouteWithChildren
+  '/logout': typeof LogoutRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/_app/billing': typeof AppBillingRoute
@@ -178,6 +187,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/logout'
     | '/privacy'
     | '/terms'
     | '/billing'
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/logout'
     | '/privacy'
     | '/terms'
     | '/billing'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/_auth'
+    | '/logout'
     | '/privacy'
     | '/terms'
     | '/_app/billing'
@@ -236,6 +248,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
+  LogoutRoute: typeof LogoutRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
 }
@@ -254,6 +267,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logout': {
+      id: '/logout'
+      path: '/logout'
+      fullPath: '/logout'
+      preLoaderRoute: typeof LogoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_auth': {
@@ -418,6 +438,7 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
+  LogoutRoute: LogoutRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
 }
