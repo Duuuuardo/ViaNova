@@ -1,6 +1,7 @@
 import { db, productCatalog, productSubscriptions, productSubscriptionAddons, productPlans, productAddonTypes } from '@vianova/db'
 import { eq, and } from 'drizzle-orm'
 import { signServiceToken } from '@vianova/oidc'
+import { resolveEntitlementAccess } from './entitlement-state'
 
 // Canal service-to-service Vianova → produto. O produto é quem escreve o
 // entitlement no próprio banco — o Vianova só empurra o estado consolidado.
@@ -135,11 +136,13 @@ export async function resolveWorkspaceLimits(
     )
     .limit(1)
 
-  const active = sub && sub.sub.status === 'active' && sub.plan
-  const limits: Record<string, number> = active ? { ...sub.plan!.limits } : {}
-  const tier = active ? sub.plan!.tier : 'none'
+  const access = sub
+    ? resolveEntitlementAccess(sub.sub, Boolean(sub.plan))
+    : { entitled: false, productStatus: 'none' }
+  const limits: Record<string, number> = access.entitled ? { ...sub!.plan!.limits } : {}
+  const tier = access.entitled ? sub!.plan!.tier : 'none'
 
-  if (active) {
+  if (access.entitled) {
     const addons = await db
       .select({ addon: productSubscriptionAddons, type: productAddonTypes })
       .from(productSubscriptionAddons)
@@ -160,7 +163,7 @@ export async function resolveWorkspaceLimits(
 
   return {
     tier,
-    status: sub?.sub.status ?? 'none',
+    status: access.productStatus,
     limits,
   }
 }
