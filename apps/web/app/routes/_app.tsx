@@ -223,7 +223,7 @@ function ProductSwitcher() {
                 href={product.webUrl}
                 className="flex items-start gap-3 px-3 py-2.5 rounded-ctrl hover:bg-paper transition-colors"
               >
-                <span className="mt-0.5 grid size-8 place-items-center rounded-ctrl bg-via-600 text-white">
+                <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-via-600 text-white">
                   <Icon size={16} aria-hidden="true" />
                 </span>
                 <span className="min-w-0">

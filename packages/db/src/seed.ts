@@ -25,7 +25,7 @@ async function seed() {
       slug: 'naia',
       name: 'Naia Campanhas',
       domain: 'naia.website',
-      description: 'Campanhas — disparo de mensagens em massa via Telegram e WhatsApp.',
+      description: 'Campanhas: disparo de mensagens em massa via Telegram e WhatsApp.',
       icon: 'naia',
       webUrl: requireEnv('NAIA_WEB_URL'),
       apiUrl: requireEnv('NAIA_API_URL'),
@@ -41,6 +41,7 @@ async function seed() {
       set: {
         name: 'Naia Campanhas',
         domain: 'naia.website',
+        description: 'Campanhas: disparo de mensagens em massa via Telegram e WhatsApp.',
         oidcClientSecretHash: hashSecret(NAIA_DEV_CLIENT_SECRET),
         redirectUris: [
           `${requireEnv('NAIA_WEB_URL')}/auth/callback`,
