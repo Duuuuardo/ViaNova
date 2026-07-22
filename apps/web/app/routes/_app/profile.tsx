@@ -19,6 +19,7 @@ import {
 import { api } from '../../lib/api'
 import { Button, Card, ErrorNote, Field, SectionTitle, StatusDot, ToggleRow } from '../../components/ui'
 import { Avatar, type AvatarFrame } from '../../components/avatar'
+import { AvatarCropper } from '../../components/avatar-cropper'
 import { createHeadConfig } from '../../lib/seo'
 import { validateName } from '../../lib/validation'
 
@@ -80,6 +81,7 @@ function ProfilePage() {
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [exported, setExported] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -94,10 +96,14 @@ function ProfilePage() {
             ? String(apiError.value.message)
             : 'Não foi possível enviar a foto. Tente novamente.',
         )
-        return
+        return false
       }
       if (data?.user?.avatarUrl) setAvatarUrl(data.user.avatarUrl)
       router.invalidate()
+      return true
+    } catch {
+      setError('Não foi possível enviar a foto. Tente novamente.')
+      return false
     } finally {
       setUploading(false)
     }
@@ -257,7 +263,7 @@ function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
-                  className="group relative rounded-full shrink-0 shadow-sm"
+                  className="group relative m-1.5 shrink-0 rounded-full shadow-sm"
                   aria-label="Trocar foto do avatar"
                   disabled={uploading}
                 >
@@ -277,7 +283,7 @@ function ProfilePage() {
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (file) handleUpload(file)
+                    if (file) setAvatarFile(file)
                     e.target.value = ''
                   }}
                 />
@@ -630,6 +636,14 @@ function ProfilePage() {
         )}
       </form>
 
+      {avatarFile && (
+        <AvatarCropper
+          file={avatarFile}
+          onClose={() => setAvatarFile(null)}
+          onConfirm={handleUpload}
+        />
+      )}
+
       <section className="space-y-3 pt-4 border-t border-line">
         <SectionTitle>Métodos de Acesso</SectionTitle>
         <Card className="divide-y divide-line">
@@ -861,5 +875,3 @@ function LocationSelector({ location, onChangeLocation }: { location: string; on
     </div>
   )
 }
-
-

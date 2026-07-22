@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter, getRouteApi } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import QRCode from 'react-qr-code'
-import { KeyRound, ShieldCheck, Smartphone, Laptop, LogOut, ShieldAlert, Check, X, AlertCircle } from 'lucide-react'
+import { AlertCircle, Check, ChevronLeft, ChevronRight, KeyRound, Laptop, LogOut, ShieldAlert, ShieldCheck, Smartphone, X } from 'lucide-react'
 import { api } from '../../lib/api'
 import { parseApiError } from '../../lib/api-error'
 import { validateNewPassword, validateTotpCode } from '../../lib/validation'
@@ -311,7 +311,9 @@ function ChangePasswordSection() {
 }
 
 function SessionsSection() {
+  const pageSize = 5
   const [sessions, setSessions] = useState<SessionItem[] | null>(null)
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [revoking, setRevoking] = useState(false)
   const [revokingId, setRevokingId] = useState<string | null>(null)
@@ -326,6 +328,7 @@ function SessionsSection() {
         return
       }
       setSessions(data.sessions as SessionItem[])
+      setPage(1)
     } finally {
       setLoading(false)
     }
@@ -367,8 +370,19 @@ function SessionsSection() {
     }
   }
 
+  const orderedSessions = sessions
+    ? [...sessions].sort((a, b) => {
+        if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      })
+    : []
+  const pageCount = Math.max(1, Math.ceil(orderedSessions.length / pageSize))
+  const visibleSessions = orderedSessions.slice((page - 1) * pageSize, page * pageSize)
+  const rangeStart = orderedSessions.length === 0 ? 0 : (page - 1) * pageSize + 1
+  const rangeEnd = Math.min(page * pageSize, orderedSessions.length)
+
   return (
-    <Card className="p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150 ease-out">
+    <Card className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
         <div>
           <h2 className="font-display text-lg font-bold text-ink-900">Sessões e Dispositivos Ativos</h2>
@@ -382,7 +396,7 @@ function SessionsSection() {
             variant="secondary"
             onClick={handleRevokeAll}
             loading={revoking}
-            className="text-xs font-bold shrink-0 text-red-600 border-red-200 hover:bg-red-50 active:scale-97 transition-all duration-150 ease-out w-full sm:w-auto"
+            className="w-full shrink-0 text-xs font-bold text-red-600 border-red-200 transition-[background-color,color,border-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-red-50 active:scale-[0.97] sm:w-auto"
           >
             <LogOut size={14} className="mr-1.5 inline" /> Encerrar todas as outras sessões
           </Button>
@@ -394,7 +408,7 @@ function SessionsSection() {
 
       {sessions && (
         <div className="space-y-3">
-          {sessions.map((s) => {
+          {visibleSessions.map((s) => {
             const isMobile = s.userAgent?.toLowerCase().includes('mobile') || s.userAgent?.toLowerCase().includes('iphone') || s.userAgent?.toLowerCase().includes('android')
             const browserName = s.userAgent?.includes('Chrome') ? 'Google Chrome' : s.userAgent?.includes('Firefox') ? 'Mozilla Firefox' : s.userAgent?.includes('Safari') && !s.userAgent?.includes('Chrome') ? 'Safari' : 'Navegador Web'
             const osName = s.userAgent?.includes('Linux') ? 'Linux' : s.userAgent?.includes('Mac OS') ? 'macOS' : s.userAgent?.includes('Windows') ? 'Windows' : 'Dispositivo'
@@ -402,7 +416,7 @@ function SessionsSection() {
             return (
               <div
                 key={s.id}
-                className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-150 ease-out ${
+                className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-[background-color,border-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${
                   s.isCurrent ? 'border-via-600 bg-via-50/60 ring-1 ring-via-600 shadow-2xs' : 'border-line hover:border-line-strong bg-paper'
                 }`}
               >
@@ -431,7 +445,7 @@ function SessionsSection() {
                     variant="secondary"
                     onClick={() => handleRevokeSingle(s.id)}
                     loading={revokingId === s.id}
-                    className="shrink-0 text-xs font-semibold py-1.5 px-3 text-red-600 border-red-200 hover:bg-red-50 active:scale-97 transition-transform duration-150 ease-out w-full sm:w-auto"
+                    className="w-full shrink-0 px-3 py-1.5 text-xs font-semibold text-red-600 border-red-200 transition-[background-color,color,border-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-red-50 active:scale-[0.97] sm:w-auto"
                   >
                     Encerrar
                   </Button>
@@ -439,6 +453,40 @@ function SessionsSection() {
               </div>
             )
           })}
+
+          {orderedSessions.length > 0 && (
+            <nav
+              aria-label="Paginação das sessões"
+              className="flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p className="text-xs text-ink-500">
+                Mostrando {rangeStart}–{rangeEnd} de {orderedSessions.length} sessões
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page === 1}
+                  aria-label="Página anterior"
+                  className="grid size-9 place-items-center rounded-ctrl border border-line-strong bg-surface text-ink-700 transition-[background-color,color,border-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-paper active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <ChevronLeft size={16} aria-hidden="true" />
+                </button>
+                <span className="min-w-20 text-center text-xs font-semibold text-ink-700" aria-live="polite">
+                  Página {page} de {pageCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                  disabled={page === pageCount}
+                  aria-label="Próxima página"
+                  className="grid size-9 place-items-center rounded-ctrl border border-line-strong bg-surface text-ink-700 transition-[background-color,color,border-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-paper active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <ChevronRight size={16} aria-hidden="true" />
+                </button>
+              </div>
+            </nav>
+          )}
         </div>
       )}
     </Card>
