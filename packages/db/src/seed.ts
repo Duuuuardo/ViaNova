@@ -17,6 +17,8 @@ function hashSecret(secret: string): string {
 
 // Secret OIDC de dev do produto naia — em produção, gerar e distribuir fora do seed.
 const NAIA_DEV_CLIENT_SECRET = requireEnv('NAIA_OIDC_CLIENT_SECRET')
+// Secret OIDC de dev do produto naia-crm (client OIDC próprio do CRM).
+const CRM_DEV_CLIENT_SECRET = requireEnv('CRM_OIDC_CLIENT_SECRET')
 
 async function seed() {
   await db
@@ -202,7 +204,168 @@ async function seed() {
       })
   }
 
-  console.log('Seed concluído: produto naia + planos + add-ons.')
+  // ─── Produto naia-crm (Naia CRM) — client OIDC e planos próprios ────────────
+  const crmRedirectUris = [
+    `${requireEnv('CRM_WEB_URL')}/auth/callback`,
+    'http://localhost:3002/auth/callback',
+    'https://crm.naia.website/auth/callback',
+  ]
+  await db
+    .insert(productCatalog)
+    .values({
+      slug: 'naia-crm',
+      name: 'Naia CRM',
+      domain: 'crm.naia.website',
+      description: 'CRM: atendimento multicanal com inbox unificado (WhatsApp e Telegram).',
+      icon: 'naia',
+      webUrl: requireEnv('CRM_WEB_URL'),
+      apiUrl: requireEnv('CRM_API_URL'),
+      oidcClientSecretHash: hashSecret(CRM_DEV_CLIENT_SECRET),
+      redirectUris: crmRedirectUris,
+    })
+    .onConflictDoUpdate({
+      target: productCatalog.slug,
+      set: {
+        name: 'Naia CRM',
+        domain: 'crm.naia.website',
+        description: 'CRM: atendimento multicanal com inbox unificado (WhatsApp e Telegram).',
+        webUrl: requireEnv('CRM_WEB_URL'),
+        apiUrl: requireEnv('CRM_API_URL'),
+        oidcClientSecretHash: hashSecret(CRM_DEV_CLIENT_SECRET),
+        redirectUris: crmRedirectUris,
+      },
+    })
+
+  // Planos do CRM. As chaves de `limits` batem com o que o crm-api mapeia em
+  // POST /internal/entitlements: agents, connections, activeConversations,
+  // managersLimit (gerentes do painel; -1 = ilimitado).
+  const crmPlans = [
+    {
+      id: 'naia-crm-free',
+      productSlug: 'naia-crm',
+      tier: 'free',
+      name: 'Grátis',
+      description: 'Para experimentar o atendimento.',
+      priceCents: 0,
+      stripePriceId: process.env.CRM_STRIPE_PRICE_FREE ?? null,
+      limits: { agents: 2, connections: 1, activeConversations: 200, managersLimit: 2 },
+      sortOrder: 0,
+    },
+    {
+      id: 'naia-crm-starter',
+      productSlug: 'naia-crm',
+      tier: 'starter',
+      name: 'Starter',
+      description: 'Para começar a atender com estrutura.',
+      priceCents: 14900,
+      stripePriceId: process.env.CRM_STRIPE_PRICE_STARTER ?? null,
+      limits: { agents: 5, connections: 3, activeConversations: 1000, managersLimit: 2 },
+      sortOrder: 1,
+    },
+    {
+      id: 'naia-crm-pro',
+      productSlug: 'naia-crm',
+      tier: 'pro',
+      name: 'Pro',
+      description: 'O plano da maioria das equipes.',
+      priceCents: 29900,
+      stripePriceId: process.env.CRM_STRIPE_PRICE_PRO ?? null,
+      limits: { agents: 15, connections: 10, activeConversations: 5000, managersLimit: 5 },
+      sortOrder: 2,
+    },
+    {
+      id: 'naia-crm-scale',
+      productSlug: 'naia-crm',
+      tier: 'scale',
+      name: 'Scale',
+      description: 'Seu domínio, sua marca. Volume ilimitado.',
+      priceCents: 69900,
+      stripePriceId: process.env.CRM_STRIPE_PRICE_SCALE ?? null,
+      limits: { agents: -1, connections: -1, activeConversations: -1, managersLimit: -1 },
+      sortOrder: 3,
+    },
+  ]
+
+  for (const plan of crmPlans) {
+    const { stripePriceId, ...rest } = plan
+    await db
+      .insert(productPlans)
+      .values(plan)
+      .onConflictDoUpdate({
+        target: productPlans.id,
+        set: stripePriceId ? plan : rest,
+      })
+  }
+
+  const crmAddons: Array<{
+    id: string
+    productSlug: string
+    key: string
+    name: string
+    description: string
+    unitLabel: string
+    priceCents: number
+    stripePriceId: string | null
+    limitsPerUnit: Record<string, number>
+  }> = [
+    {
+      id: 'naia-crm-extra-agents',
+      productSlug: 'naia-crm',
+      key: 'extra_agents',
+      name: 'Agente extra',
+      description: 'Um agente adicional para atender conversas no workspace.',
+      unitLabel: 'agente',
+      priceCents: 1900,
+      stripePriceId: process.env.CRM_STRIPE_PRICE_EXTRA_AGENTS ?? null,
+      limitsPerUnit: { agents: 1 },
+    },
+    {
+      id: 'naia-crm-extra-connections',
+      productSlug: 'naia-crm',
+      key: 'extra_connections',
+      name: 'Conexão extra',
+      description: 'Um canal adicional para conectar mais números de WhatsApp ou bots do Telegram.',
+      unitLabel: 'conexão',
+      priceCents: 3900,
+      stripePriceId: process.env.CRM_STRIPE_PRICE_EXTRA_CONNECTIONS ?? null,
+      limitsPerUnit: { connections: 1 },
+    },
+    {
+      id: 'naia-crm-extra-managers',
+      productSlug: 'naia-crm',
+      key: 'extra_managers',
+      name: 'Gerente extra',
+      description: 'Um gerente adicional para administrar equipes e permissões do workspace.',
+      unitLabel: 'gerente',
+      priceCents: 1900,
+      stripePriceId: process.env.CRM_STRIPE_PRICE_EXTRA_MANAGERS ?? null,
+      limitsPerUnit: { managersLimit: 1 },
+    },
+    {
+      id: 'naia-crm-extra-conversations',
+      productSlug: 'naia-crm',
+      key: 'extra_conversations',
+      name: 'Conversas ativas extras',
+      description: 'Pacote de 1.000 conversas ativas adicionais no inbox.',
+      unitLabel: '1.000 conversas ativas',
+      priceCents: 2900,
+      stripePriceId: process.env.CRM_STRIPE_PRICE_EXTRA_CONVERSATIONS ?? null,
+      limitsPerUnit: { activeConversations: 1000 },
+    },
+  ]
+
+  for (const addon of crmAddons) {
+    const { stripePriceId, ...rest } = addon
+    await db
+      .insert(productAddonTypes)
+      .values(addon)
+      .onConflictDoUpdate({
+        target: productAddonTypes.id,
+        set: stripePriceId ? addon : rest,
+      })
+  }
+
+  console.log('Seed concluído: produtos naia + naia-crm + planos + add-ons.')
   process.exit(0)
 }
 

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { CalendarClock, HardDrive, Package, Undo2, Upload, Users, Link2, Zap, Megaphone, Workflow } from 'lucide-react'
+import { CalendarClock, HardDrive, Package, Undo2, Upload, Users, Link2, Zap, Megaphone, Workflow, UserCog } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button, Card, ErrorNote, StatusDot } from '../../components/ui'
 import { createHeadConfig } from '../../lib/seo'
@@ -73,6 +73,7 @@ const limitLabels: Record<string, string> = {
   automations: 'Automações',
   storageBytes: 'Armazenamento',
   maxFileSizeBytes: 'Tamanho máx. por arquivo',
+  managersLimit: 'Gerentes',
 }
 
 const limitIcons: Record<string, typeof Users> = {
@@ -83,15 +84,16 @@ const limitIcons: Record<string, typeof Users> = {
   automations: Workflow,
   storageBytes: HardDrive,
   maxFileSizeBytes: Upload,
+  managersLimit: UserCog,
 }
 
-const limitOrder = ['seats', 'connections', 'creditsPerCycle', 'campaignsPerMonth', 'automations', 'storageBytes', 'maxFileSizeBytes']
+const limitOrder = ['seats', 'connections', 'creditsPerCycle', 'campaignsPerMonth', 'automations', 'storageBytes', 'maxFileSizeBytes', 'managersLimit']
 
 function formatLimitValue(key: string, value: number): string {
   if (key === 'storageBytes' || key === 'maxFileSizeBytes') {
     return formatBytes(value)
   }
-  if (key === 'automations' && value < 0) return 'ilimitado'
+  if (value < 0) return 'ilimitado'
   return value.toLocaleString('pt-BR')
 }
 
