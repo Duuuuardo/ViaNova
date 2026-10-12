@@ -3,9 +3,6 @@ import { users } from './users'
 import { organizations } from './organizations'
 import { productCatalog, productPlans, productAddonTypes } from './catalog'
 
-// Assinatura por workspace de produto — o workspace (que vive no banco do
-// produto) é o titular; workspace_id aqui é um ID externo, não FK.
-// Customer Stripe é por workspace de produto, nunca por Organização.
 export const productSubscriptions = pgTable(
   'product_subscriptions',
   {
@@ -19,8 +16,6 @@ export const productSubscriptions = pgTable(
       onDelete: 'set null',
     }),
     ownerUserId: text('owner_user_id').references(() => users.id),
-    // Elegibilidade vitalícia concedida pelo produto. Registrar um workspace
-    // no billing não significa que ele pode ativar o plano grátis.
     freeEligible: boolean('free_eligible').notNull().default(true),
     planId: text('plan_id').references(() => productPlans.id),
     stripeCustomerId: text('stripe_customer_id'),
@@ -53,7 +48,6 @@ export const productSubscriptionAddons = pgTable(
   (t) => [uniqueIndex('product_sub_addons_sub_type_idx').on(t.productSubscriptionId, t.addonTypeId)],
 )
 
-// Espelho de faturas do Stripe, só para exibição no portal.
 export const invoices = pgTable('invoices', {
   id: text('id').primaryKey(),
   productSubscriptionId: text('product_subscription_id')
@@ -68,9 +62,6 @@ export const invoices = pgTable('invoices', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
-// Registro idempotente dos reembolsos recebidos do Stripe. O escopo vem da
-// metadata gravada pelo Vianova ao criar o refund; reembolsos externos sem
-// metadata nunca removem um add-on por inferência de valor.
 export const billingRefunds = pgTable('billing_refunds', {
   id: text('id').primaryKey(),
   stripeRefundId: text('stripe_refund_id').notNull().unique(),
@@ -90,6 +81,14 @@ export const billingRefunds = pgTable('billing_refunds', {
   processedAt: timestamp('processed_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+export const stripeWebhookEvents = pgTable('stripe_webhook_events', {
+  id: text('id').primaryKey(),
+  stripeEventId: text('stripe_event_id').notNull().unique(),
+  type: text('type').notNull(),
+  processedAt: timestamp('processed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
 export type ProductSubscription = typeof productSubscriptions.$inferSelect
