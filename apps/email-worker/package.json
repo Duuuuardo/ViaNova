@@ -13,7 +13,7 @@
     "@vianova/config-client": "workspace:*",
     "bullmq": "5.80.2",
     "ioredis": "5.10.1",
-    "nodemailer": "9.0.3"
+    "nodemailer": "10.0.16"
   },
   "devDependencies": {
     "@vianova/config": "workspace:*",

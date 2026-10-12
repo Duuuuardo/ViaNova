@@ -22,7 +22,7 @@
     "drizzle-orm": "^0.45.2",
     "elysia": "^1",
     "logixlysia": "^6.6.0",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^10.0.16",
     "otpauth": "^9.5.1",
     "stripe": "^17"
   },
