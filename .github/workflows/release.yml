@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Versão SemVer sem prefixo v (ex.: 1.2.3)"
+        description: "SemVer version without the v prefix (e.g. 1.2.3)"
         required: true
         type: string
 
@@ -13,10 +13,10 @@ permissions:
 
 jobs:
   release:
-    name: Create production release
+    name: Create release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: main
           fetch-depth: 0
