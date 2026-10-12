@@ -1,15 +1,15 @@
-# Contribuindo
+# Contributing
 
-## Fluxo de branches
+## Branch flow
 
-- Crie `feature/<descricao>` ou `fix/<descricao>` a partir de `develop`.
-- Abra PR para `develop`; use squash merge depois que o CI passar.
-- Promova `develop` para `main` por PR sem squash. `main` representa produção.
-- Crie `hotfix/<descricao>` a partir de `main`. Depois de publicar em `main`,
-  incorpore o mesmo hotfix em `develop`.
-- Nunca faça force push em `main` ou `develop`.
+- Create `feature/<description>` or `fix/<description>` from `develop`.
+- Open PRs against `develop`; squash merge after CI passes.
+- Promote `develop` to `main` via PR without squash. `main` tracks production.
+- Create `hotfix/<description>` from `main`. After releasing to `main`, port the fix back to `develop`.
+- Never force push `main` or `develop`.
 
-## Antes do PR
+## Before opening a PR
 
-Execute `bun install --frozen-lockfile`, `bun run typecheck`, `bun test` e
-`bun run build`. Documente migrations, variáveis de ambiente e o rollback.
+Run `bun install --frozen-lockfile`, `bun run typecheck`, `bun test`, and
+`bun run build`. Document migrations, new environment variables, and the
+rollback plan when they apply.

@@ -1,38 +1,48 @@
 # Vianova
 
-Hub de conta, identidade e billing do ecossistema (`vianova.software`). É o "Atlassian ID" da casa: conta única, 2FA, Organização, catálogo de produtos, portal de billing (Stripe vive **exclusivamente** aqui) e Identity Provider OIDC para os produtos (Naia, e futuros).
+Account, identity, and billing hub for a product ecosystem (`vianova.software`). It plays the "Atlassian ID" role: single account, 2FA, organizations, product catalog, billing portal, and an OIDC identity provider for the products (Naia and future ones). Stripe integration exists only in this repository.
 
-Specs completas vivem no repo NovaPlatform: `docs/architecture.md`, `docs/vianova-business-rules.md`, `docs/vianova-stack.md`.
+## Structure
 
-## Estrutura
-
-| Pacote | Responsabilidade |
+| Package | Responsibility |
 |---|---|
-| `apps/api` | Elysia (porta 5000) — auth, 2FA, Organização, catálogo, OIDC provider, Stripe, service tokens |
-| `apps/web` | TanStack Start (porta 3000) — login, cadastro, 2FA, perfil, Organização, portal de billing, product switcher |
-| `packages/db` | Drizzle + postgres — banco `vianova` |
-| `packages/oidc` | Assinatura/verificação de JWT (`jose`), JWKS, introspection, service tokens |
-| `packages/client` | Eden Treaty client do `apps/api` |
+| `apps/api` | Elysia (port 5000): auth, 2FA, organizations, catalog, OIDC provider, Stripe, service tokens |
+| `apps/web` | TanStack Start (port 3000): login, registration, 2FA, profile, organizations, billing portal, product switcher |
+| `apps/landing` | Public landing site |
+| `apps/email-worker` | BullMQ worker that sends transactional email |
+| `apps/config-server` | Centralized per-product, per-environment configuration server |
+| `packages/db` | Drizzle + Postgres (`vianova` database), migrations, seed |
+| `packages/oidc` | JWT signing/verification (`jose`), JWKS, introspection, service tokens |
+| `packages/client` | Eden Treaty client for `apps/api` |
 
-## Rodando em dev
+## Running in dev
 
 ```bash
-docker compose up -d        # postgres (5434) + redis (6380)
+docker compose up -d
 cp .env.example .env
 bun install
 bun run db:migrate
-bun run db:seed             # catálogo de produtos (naia) + planos
-bun run dev                 # api (5000) + web (3000)
+bun run db:seed
+bun run dev
 ```
 
-Cliente OIDC de teste (simula um produto trocando código por JWT):
+Test OIDC client that simulates a product exchanging an authorization code for a JWT:
 
 ```bash
-bun scripts/mock-oidc-client.ts   # sobe em http://localhost:9999
+bun scripts/mock-oidc-client.ts
 ```
 
-## Contratos públicos (não quebrar sem coordenar)
+## Public contracts
+
+Breaking these requires coordination with the products that consume them:
 
 - `GET /oidc/authorize`, `POST /oidc/token`, `POST /oidc/introspect`, `GET /.well-known/jwks.json`
-- `POST /internal/service-token` — emissão de token de serviço escopado (Vianova → produto)
-- Vianova → produto: `POST {product.api_url}/internal/entitlements` com token `service:entitlements:write`
+- `POST /internal/service-token`: issues a scoped service token (Vianova to product)
+- Vianova calls products back at `POST {product.api_url}/internal/entitlements` with a `service:entitlements:write` token
+
+## Security notes
+
+- Service tokens are short-lived JWTs scoped to a single product audience and explicit scopes.
+- OIDC user JWTs carry `sid` and are tied to the Vianova session, so logout and introspection can revoke access everywhere.
+- File and avatar blobs live in MinIO; credentials stay server-side.
+- Product-facing error responses never leak internal details; see `apps/api/src/plugins/error-sanitizer.ts`.
