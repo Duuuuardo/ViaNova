@@ -13,8 +13,8 @@ function requireEnv(name: string): string {
 
 export const ISSUER = requireEnv('VIANOVA_API_URL')
 
-const USER_TOKEN_TTL_SECONDS = 60 * 60 // 1h
-const SERVICE_TOKEN_TTL_SECONDS = 5 * 60 // 5min — escopado e de vida curta
+const USER_TOKEN_TTL_SECONDS = 60 * 60
+const SERVICE_TOKEN_TTL_SECONDS = 5 * 60
 
 export interface UserTokenInput {
   user: {
@@ -30,19 +30,13 @@ export interface UserTokenInput {
   nonce?: string | null
 }
 
-// JWT de usuário emitido no /oidc/token. O claim `sid` amarra o token à sessão
-// do Vianova — é o que permite single sign-out imediato via introspection.
 export async function signUserToken({ user, sessionId, clientSlug, nonce }: UserTokenInput) {
   const { kid, privateKey } = await getSigningKey()
 
   const jwt = new SignJWT({
     email: user.email,
     name: user.name,
-    // Claim padrão OIDC — indica se o email foi confirmado pelo usuário.
-    // Produtos usam este claim para decidir limitações de funcionalidade.
     email_verified: user.emailVerifiedAt != null,
-    // Avatar servido pelo MinIO do Vianova — produtos exibem a URL, nunca
-    // armazenam a imagem nem falam com o storage direto.
     ...(user.avatarUrl ? { picture: user.avatarUrl } : {}),
     ...(user.avatarFrame ? { picture_frame: user.avatarFrame } : {}),
     sid: sessionId,
@@ -69,8 +63,6 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
   }
 }
 
-// Base do single sign-out: um token só é considerado ativo enquanto a sessão
-// do Vianova que o originou existir. Logout deleta a sessão → active: false.
 export async function introspectToken(token: string): Promise<
   | { active: false }
   | { active: true; sub: string; sid: string; aud?: string | string[]; exp?: number; scope?: string }
@@ -78,7 +70,6 @@ export async function introspectToken(token: string): Promise<
   const payload = await verifyToken(token)
   if (!payload || !payload.sub) return { active: false }
 
-  // Tokens de serviço não têm sid — validade é só a do próprio JWT.
   if (typeof payload.scope === 'string' && payload.scope.startsWith('service:')) {
     return {
       active: true,
@@ -104,8 +95,6 @@ export async function introspectToken(token: string): Promise<
   return { active: true, sub: payload.sub, sid, aud: payload.aud, exp: payload.exp }
 }
 
-// Token de máquina para chamadas Vianova → produto (ex.: sync de entitlements).
-// Sempre escopado por produto + escopo, TTL curto, auditado em service_tokens.
 export async function signServiceToken(productSlug: string, scope: string) {
   const { kid, privateKey } = await getSigningKey()
   const jti = crypto.randomUUID()

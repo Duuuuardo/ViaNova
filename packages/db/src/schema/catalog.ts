@@ -1,7 +1,5 @@
 import { pgTable, text, timestamp, boolean, integer, jsonb } from 'drizzle-orm/pg-core'
 
-// Catálogo dos produtos do ecossistema. Cada produto também é um client OIDC
-// (client_id = slug) e um alvo de chamadas service-to-service (api_url).
 export const productCatalog = pgTable('product_catalog', {
   slug: text('slug').primaryKey(),
   name: text('name').notNull(),
@@ -16,8 +14,6 @@ export const productCatalog = pgTable('product_catalog', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
-// Espelho dos planos de cada produto, só para exibição e checkout.
-// A fonte da verdade dos limites de cada tier é o produto.
 export const productPlans = pgTable('product_plans', {
   id: text('id').primaryKey(),
   productSlug: text('product_slug')
@@ -34,8 +30,6 @@ export const productPlans = pgTable('product_plans', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
-// Add-ons são específicos de produto (ex.: campanhas extras do Naia),
-// mas comprados e exibidos no Vianova.
 export const productAddonTypes = pgTable('product_addon_types', {
   id: text('id').primaryKey(),
   productSlug: text('product_slug')

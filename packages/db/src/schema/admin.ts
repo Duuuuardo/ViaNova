@@ -1,8 +1,6 @@
 import { pgTable, text, timestamp, boolean, jsonb } from 'drizzle-orm/pg-core'
 import { users } from './users'
 
-// Auditoria de ações administrativas. Toda mutação feita por um admin/superadmin
-// no painel deve ser registrada aqui.
 export const auditLogs = pgTable('audit_logs', {
   id: text('id').primaryKey(),
   actorUserId: text('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
@@ -15,7 +13,6 @@ export const auditLogs = pgTable('audit_logs', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
-// Configurações gerais da plataforma (nome, URLs, Stripe, etc.).
 export const platformSettings = pgTable('platform_settings', {
   key: text('key').primaryKey(),
   value: jsonb('value').$type<unknown>().notNull().default({}),
@@ -23,7 +20,6 @@ export const platformSettings = pgTable('platform_settings', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
 
-// Feature flags editáveis em runtime pelo painel admin.
 export const featureFlags = pgTable('feature_flags', {
   id: text('id').primaryKey(),
   key: text('key').notNull().unique(),

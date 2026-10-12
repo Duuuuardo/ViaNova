@@ -2,7 +2,6 @@ import { Elysia } from 'elysia'
 import { db, productCatalog, productPlans, productAddonTypes } from '@vianova/db'
 import { eq, and, asc } from 'drizzle-orm'
 
-// Campos públicos do catálogo — nunca expor oidc_client_secret_hash.
 const publicProductFields = {
   slug: productCatalog.slug,
   name: productCatalog.name,

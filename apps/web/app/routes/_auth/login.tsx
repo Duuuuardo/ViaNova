@@ -15,15 +15,11 @@ export const Route = createFileRoute('/_auth/login')({
   validateSearch: (search: Record<string, unknown>) => ({
     redirect_uri: typeof search.redirect_uri === 'string' ? search.redirect_uri : undefined,
   }),
-  // Já logado não deve ver a tela de login novamente. Se veio de um fluxo OIDC
-  // de outro produto, completa o redirect; senão manda pra conta.
   beforeLoad: async ({ search }) => {
     const user = await getSession()
     if (!user) return
     const oidcRedirect = safeOidcRedirect(search.redirect_uri)
     if (oidcRedirect) {
-      // Funciona tanto no SSR quanto no browser. O fallback anterior mandava
-      // usuários já autenticados para a home durante uma navegação server-side.
       throw redirect({ href: oidcRedirect })
     }
     throw redirect({ to: '/' })

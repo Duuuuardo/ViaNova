@@ -6,14 +6,6 @@ export type SubscriptionEntitlementState = {
   currentPeriodEnd: Date | null
 }
 
-/**
- * Decide se o plano comprado ainda deve valer no produto.
- *
- * Um cancelamento agendado não encerra o período já pago. Mesmo que um evento
- * intermediário espelhe outro status, `cancelAtPeriodEnd` + uma data futura
- * preservam o plano até o webhook de encerramento efetivo migrar a assinatura
- * para o plano grátis.
- */
 export function resolveEntitlementAccess(
   subscription: SubscriptionEntitlementState,
   hasPlan: boolean,
@@ -30,8 +22,6 @@ export function resolveEntitlementAccess(
 
   return {
     entitled,
-    // Os produtos usam status=active como gate. Enquanto o período pago ainda
-    // vale, o estado de cobrança do Stripe não deve desligar o produto.
     productStatus: entitled ? 'active' : subscription.status,
   }
 }

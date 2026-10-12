@@ -1,7 +1,5 @@
 import { API_URL } from './api'
 
-// O único redirect externo aceito após login é a volta pro fluxo OIDC — a URL
-// de /oidc/authorize da nossa própria API. Qualquer outra coisa é ignorada.
 export function safeOidcRedirect(redirectUri: string | undefined): string | null {
   if (!redirectUri) return null
   try {
@@ -11,7 +9,6 @@ export function safeOidcRedirect(redirectUri: string | undefined): string | null
       return url.toString()
     }
   } catch {
-    // URL inválida — ignora
   }
   return null
 }

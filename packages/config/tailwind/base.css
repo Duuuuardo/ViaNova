@@ -1,43 +1,32 @@
 @theme {
-  /* ─── Tinta — texto e superfícies escuras ─────────────────────────────── */
   --color-ink-950: #100d16;
   --color-ink-900: #16151f;
   --color-ink-700: #3a3947;
   --color-ink-500: #6b6f7e;
   --color-ink-400: #9498a6;
-
-  /* ─── Via — roxo Vianova. O único acento: ações, foco, marca. ─────────── */
   --color-via-50:  #faf4ff;
   --color-via-100: #f3e6ff;
   --color-via-200: #e7cdff;
   --color-via-300: #dcb0ff;
   --color-via-400: #d08bff;
-  --color-via-500: #c466ff; /* cor de marca — acentos, logo, highlights */
-  --color-via-600: #a63fe8; /* CTAs e botões primários (contraste com branco) */
+  --color-via-500: #c466ff;
+  --color-via-600: #a63fe8;
   --color-via-700: #8a2cc4;
   --color-via-800: #70249e;
   --color-via-900: #571d79;
-
-  /* ─── Superfícies frias ───────────────────────────────────────────────── */
   --color-paper: #f6f7f9;
   --color-surface: #ffffff;
   --color-line: #e4e6ec;
   --color-line-strong: #c9ccd6;
-
-  /* ─── Semânticas ──────────────────────────────────────────────────────── */
   --color-ok-50: #eefdf5;
   --color-ok-600: #1a9a5b;
   --color-ok-700: #147a47;
   --color-warn-600: #c77e14;
   --color-danger-600: #d64545;
   --color-danger-50: #fdf3f3;
-
-  /* ─── Tipografia ──────────────────────────────────────────────────────── */
   --font-display: 'Overpass Variable', system-ui, sans-serif;
   --font-sans: 'Public Sans Variable', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-
-  /* ─── Radius ──────────────────────────────────────────────────────────── */
   --radius-ctrl: 8px;
   --radius-card: 12px;
 }

@@ -11,9 +11,6 @@ export const sessions = pgTable('sessions', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
-// Identifica um navegador confiável por um cookie aleatório e revogável. O token
-// nunca é persistido em claro; limpar os cookies faz o próximo acesso ser tratado
-// como um novo dispositivo.
 export const loginDevices = pgTable(
   'login_devices',
   {
@@ -55,9 +52,6 @@ export const totpSecrets = pgTable('totp_secrets', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
-// Token temporário usado no fluxo de 2FA: a senha é validada na primeira
-// requisição, mas a sessão só é criada após o TOTP. Evita armazenar
-// credenciais no sessionStorage do navegador.
 export const loginChallenges = pgTable('login_challenges', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),

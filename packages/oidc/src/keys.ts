@@ -13,9 +13,6 @@ const ALG = 'RS256'
 
 let cachedKey: { kid: string; privateKey: CryptoKey } | null = null
 
-// Chave de assinatura persistida no banco — gerada no primeiro boot.
-// Rotação: inserir chave nova e marcar revoked_at na antiga (a antiga continua
-// no JWKS até os tokens em circulação expirarem).
 export async function getSigningKey(): Promise<{ kid: string; privateKey: CryptoKey }> {
   if (cachedKey) return cachedKey
 
@@ -49,7 +46,6 @@ export async function getSigningKey(): Promise<{ kid: string; privateKey: Crypto
 }
 
 export async function getJwks(): Promise<{ keys: JWK[] }> {
-  // Garante que a chave existe antes do primeiro GET do JWKS.
   await getSigningKey()
   const rows = await db.select().from(oidcKeys)
   return { keys: rows.map((r) => r.publicJwk as JWK) }

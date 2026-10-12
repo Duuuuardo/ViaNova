@@ -7,7 +7,7 @@ export function VianovaMark({ size = 28 }: { size?: number }) {
       fill="none"
       aria-hidden="true"
     >
-      {/* duas vias convergindo num ponto — o "V" da Vianova */}
+      {}
       <path
         d="M5 6 L16 26 L27 6"
         stroke="url(#via-grad)"

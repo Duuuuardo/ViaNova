@@ -41,11 +41,11 @@ const PANEL_FEATURES = [
 function BrandPanel() {
   return (
     <div className="hidden lg:flex relative flex-col bg-ink-950 px-14 py-12 overflow-hidden">
-      {/* Decorative blobs */}
+      {}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute -top-40 -left-40 h-[520px] w-[520px] rounded-full bg-via-600 opacity-[0.14] blur-3xl" />
         <div className="absolute bottom-[-8%] right-[-12%] h-96 w-96 rounded-full bg-via-500 opacity-[0.09] blur-3xl" />
-        {/* Subtle grid */}
+        {}
         <div
           aria-hidden="true"
           className="absolute inset-0 opacity-[0.025]"
@@ -57,12 +57,12 @@ function BrandPanel() {
         />
       </div>
 
-      {/* Logo */}
+      {}
       <div className="relative">
         <ViaLogo size={28} dark />
       </div>
 
-      {/* Headline + features */}
+      {}
       <div className="relative flex-1 flex flex-col justify-center max-w-xs">
         <h1 className="text-[2.1rem] font-display font-bold leading-[1.18] tracking-tight text-white">
           Uma conta.<br />
@@ -97,9 +97,9 @@ function AuthLayout() {
     <div className="min-h-screen lg:grid lg:grid-cols-[1fr_480px]">
       <BrandPanel />
 
-      {/* Form panel */}
+      {}
       <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12 bg-paper lg:min-h-0">
-        {/* Mobile logo */}
+        {}
         <div className="mb-8 lg:hidden">
           <ViaLogo size={26} />
         </div>

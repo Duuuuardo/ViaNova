@@ -19,7 +19,6 @@ export function sanitizeErrorMessage(
 
   const checkStr = raw.toLowerCase()
 
-  // Verificação rigorosa de vazamentos de banco de dados, SQL e rastros de stack
   const isDbOrInternalLeak =
     checkStr.includes('failed query:') ||
     checkStr.includes('syntax error at or near') ||

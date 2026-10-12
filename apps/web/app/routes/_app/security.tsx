@@ -30,7 +30,6 @@ function SecurityPage() {
   const [activeTab, setActiveTab] = useState<'password' | '2fa' | 'sessions' | 'danger'>('password')
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
-  // Cancela agendamento de exclusão
   const [canceling, setCanceling] = useState(false)
   async function handleCancelDeletion() {
     setCanceling(true)
@@ -44,7 +43,7 @@ function SecurityPage() {
 
   return (
     <div className="max-w-4xl space-y-8 pb-16">
-      {/* Header */}
+      {}
       <div className="pb-6 border-b border-line">
         <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink-900">Segurança da Conta</h1>
         <p className="mt-1 text-sm text-ink-500 max-w-xl">
@@ -52,7 +51,7 @@ function SecurityPage() {
         </p>
       </div>
 
-      {/* Alerta de Carência de 15 Dias (se agendado) */}
+      {}
       {user.scheduledForDeletionAt && (
         <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -130,20 +129,20 @@ function SecurityPage() {
         </button>
       </div>
 
-      {/* Tab 1: Alterar Senha */}
+      {}
       {activeTab === 'password' && <ChangePasswordSection />}
 
-      {/* Tab 2: 2FA */}
+      {}
       {activeTab === '2fa' && (
         <div className="space-y-6 animate-in fade-in duration-200">
           {user.twoFactorEnabled ? <DisableTwoFactor /> : <EnableTwoFactor />}
         </div>
       )}
 
-      {/* Tab 3: Sessões Ativas */}
+      {}
       {activeTab === 'sessions' && <SessionsSection />}
 
-      {/* Tab 4: Danger Zone / Exclusão de Conta */}
+      {}
       {activeTab === 'danger' && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <Card className="p-6 space-y-4 border-red-200 bg-red-50/20">
@@ -170,7 +169,7 @@ function SecurityPage() {
         </div>
       )}
 
-      {/* Modal de Exclusão com Carência */}
+      {}
       {deleteModalOpen && (
         <DeleteAccountModal
           onClose={() => setDeleteModalOpen(false)}

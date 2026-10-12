@@ -1,9 +1,3 @@
-// Cliente OIDC de mentira para validar o Milestone 1 — simula um produto
-// (usa o client "naia" do catálogo) fazendo o Authorization Code flow completo
-// contra o Vianova, com verificação do JWT via JWKS.
-//
-// Uso:  bun scripts/mock-oidc-client.ts
-// Abra http://localhost:9999 e clique em "Entrar com Vianova".
 
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
@@ -73,7 +67,6 @@ Bun.serve({
         return page(`<p>Erro na troca do código:</p><pre>${JSON.stringify(tokenData, null, 2)}</pre>`)
       }
 
-      // Validação local via JWKS — exatamente como um produto real faria.
       try {
         const { payload, protectedHeader } = await jwtVerify(tokenData.access_token, jwks, {
           issuer: VIANOVA_API,

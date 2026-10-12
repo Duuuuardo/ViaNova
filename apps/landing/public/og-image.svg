@@ -1,7 +1,6 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="1200" height="630" fill="#ffffff" />
 
-  <!-- Background gradient -->
   <defs>
     <linearGradient id="bg-grad" x1="0" y1="0" x2="1200" y2="630">
       <stop offset="0%" stopColor="#FAF4FF" />
@@ -15,14 +14,11 @@
 
   <rect width="1200" height="630" fill="url(#bg-grad)" />
 
-  <!-- Logo marca (escalado) -->
   <g transform="translate(600, 200)">
-    <!-- V path escalado para 200px -->
     <path d="M50 60 L160 260 L270 60" stroke="url(#via-grad)" strokeWidth="50" strokeLinecap="round" strokeLinejoin="round" />
     <circle cx="160" cy="260" r="35" fill="#C466FF" />
   </g>
 
-  <!-- Tagline -->
   <text x="600" y="420" fontFamily="'Overpass', sans-serif" fontSize="48" fontWeight="700" textAnchor="middle" fill="#16151F">
     Uma conta para todos
   </text>

@@ -4,14 +4,14 @@ import { resolveEntitlementAccess } from './entitlement-state'
 const now = new Date('2026-07-22T12:00:00.000Z')
 
 describe('resolveEntitlementAccess', () => {
-  it.each(['active', 'trialing', 'past_due'])('mantém acesso para status %s', (status) => {
+  it.each(['active', 'trialing', 'past_due'])('grants access for status %s', (status) => {
     expect(resolveEntitlementAccess({ status, cancelAtPeriodEnd: false, currentPeriodEnd: null }, true, now)).toEqual({
       entitled: true,
       productStatus: 'active',
     })
   })
 
-  it('mantém o plano durante um cancelamento agendado', () => {
+  it('keeps the plan during a scheduled cancellation', () => {
     expect(resolveEntitlementAccess({
       status: 'canceled',
       cancelAtPeriodEnd: true,
@@ -19,7 +19,7 @@ describe('resolveEntitlementAccess', () => {
     }, true, now)).toEqual({ entitled: true, productStatus: 'active' })
   })
 
-  it('encerra o acesso depois do período agendado', () => {
+  it('ends access after the scheduled period', () => {
     expect(resolveEntitlementAccess({
       status: 'canceled',
       cancelAtPeriodEnd: true,
@@ -27,7 +27,7 @@ describe('resolveEntitlementAccess', () => {
     }, true, now)).toEqual({ entitled: false, productStatus: 'canceled' })
   })
 
-  it('não concede acesso sem plano associado', () => {
+  it('denies access without an associated plan', () => {
     expect(resolveEntitlementAccess({ status: 'active', cancelAtPeriodEnd: false, currentPeriodEnd: null }, false, now)).toEqual({
       entitled: false,
       productStatus: 'active',

@@ -19,7 +19,6 @@ import { loadProductConfig } from './lib/config'
 import { requireEnv, getTokenHashSalt, getCorsOriginHandler, isProduction } from './lib/env'
 
 async function bootstrap() {
-  // Secrets obrigatórios — fail-closed no bootstrap.
   requireEnv('VIANOVA_INTERNAL_SECRET')
   requireEnv('INTERNAL_ADMIN_SECRET')
   requireEnv('TOKEN_HASH_SALT')
@@ -32,8 +31,6 @@ async function bootstrap() {
   const corsOrigin = getCorsOriginHandler()
 
   const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000)
-  // Limite generoso para não atrapalhar navegação normal de SPA
-  // (múltiplas abas, troca rápida pela sidebar). Ajustável via env.
   const rateLimitMax = Number(process.env.RATE_LIMIT_MAX ?? 1_000)
 
   const app = new Elysia()
@@ -87,7 +84,6 @@ async function bootstrap() {
     .get('/health', () => ({ status: 'ok' }))
     .listen(process.env.PORT ?? 5000)
 
-  // Worker in-process no Milestone 1 (sync de entitlements + revogação de sessão).
   startWorker()
 
   console.log(`vianova-api rodando na porta ${app.server?.port}`)

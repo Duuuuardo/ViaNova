@@ -1,10 +1,3 @@
-/**
- * Helpers para segredos obrigatórios.
- *
- * Regra: nenhum fallback hardcoded. Segredos usados em rotas internas devem
- * ser declarados via getRequiredSecret() no carregamento do módulo; assim, se
- * estiverem ausentes, a aplicação falha fatalmente no bootstrap.
- */
 
 const requiredSecrets = new Set<string>()
 
@@ -25,10 +18,6 @@ export function getOptionalSecret(name: string): string | undefined {
   return value && value.trim().length > 0 ? value : undefined
 }
 
-/**
- * Comparação constant-time de segredos.
- * Retorna false imediatamente se o valor fornecido for vazio.
- */
 export function verifySecret(provided: string | undefined | null, expected: string): boolean {
   if (!provided) return false
   const providedBuf = Buffer.from(provided)
@@ -40,11 +29,6 @@ export function verifySecret(provided: string | undefined | null, expected: stri
   )
 }
 
-/**
- * Re-valida todos os segredos obrigatórios no bootstrap.
- * Útil para garantir falha rápida mesmo que algum módulo não tenha sido
- * importado ainda no startup.
- */
 export function checkRequiredSecretsOnBootstrap(): void {
   for (const name of requiredSecrets) {
     getRequiredSecret(name)

@@ -1,25 +1,17 @@
-// Validação de arquivos enviados por workspaces de produto.
-// Regra dura: tudo que não está na allowlist é rejeitado.
-// Objetivo: impedir que usuários façam upload de executáveis, scripts, HTML,
-// ou qualquer arquivo que possa rodar no servidor/navegador.
 
 const ALLOWED_MIME_TYPES: Record<string, string> = {
-  // Imagens
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
   'image/gif': 'gif',
   'image/svg+xml': 'svg',
-  // Áudio
   'audio/mpeg': 'mp3',
   'audio/ogg': 'ogg',
   'audio/wav': 'wav',
   'audio/webm': 'webm',
-  // Vídeo
   'video/mp4': 'mp4',
   'video/webm': 'webm',
   'video/ogg': 'ogv',
-  // Documentos
   'application/pdf': 'pdf',
   'application/msword': 'doc',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
@@ -45,8 +37,6 @@ export function mimeTypeForExtension(extension: string): string | null {
 }
 
 export function sanitizeFileName(name: string): string {
-  // Remove path traversal e caracteres perigosos; mantém letras, números,
-  // espaços, hífens, underscores e pontos.
   return name
     .replace(/\\/g, '/')
     .split('/')
@@ -92,9 +82,6 @@ export function validateWorkspaceFile(file: File): FileValidationResult {
   return { ok: true, extension: ext, mimeType, sanitizedName }
 }
 
-// Garante que um MIME type cadastrado no banco nunca seja servido como algo
-// executável. Se por algum bug o mime type estiver fora da allowlist, força
-// download genérico.
 export function safeContentType(mimeType: string): string {
   const normalized = mimeType.toLowerCase()
   if (isAllowedMimeType(normalized)) return normalized
@@ -103,9 +90,7 @@ export function safeContentType(mimeType: string): string {
 
 export function shouldForceDownload(mimeType: string): boolean {
   const normalized = mimeType.toLowerCase()
-  // SVG pode conter scripts; força download até sanitizarmos no futuro.
   if (normalized === 'image/svg+xml') return true
-  // Documentos em geral ficam melhor como attachment.
   if (normalized.startsWith('application/') || normalized === 'text/plain') return true
   return false
 }

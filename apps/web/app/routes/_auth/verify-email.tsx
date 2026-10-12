@@ -27,7 +27,6 @@ function VerifyEmailPage() {
         return
       }
 
-      // Checa se já tem sessão ativa — se sim, manda direto pro app.
       const { data } = await api.auth.me.get()
       if (data && 'user' in data) {
         setState('ok-redirect')

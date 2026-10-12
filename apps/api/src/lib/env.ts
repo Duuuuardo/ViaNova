@@ -26,11 +26,6 @@ export function getCookieOptions() {
   const domain = process.env.VIANOVA_COOKIE_DOMAIN
   return {
     httpOnly: true,
-    // SameSite=None é necessário para o cookie fluir cross-site (billing/OIDC
-    // entre os produtos). O spec exige que SameSite=None venha SEMPRE com
-    // Secure — senão o navegador rejeita o cookie. Em dev usamos http://localhost,
-    // que os navegadores tratam como contexto seguro e aceitam cookies Secure.
-    // Por isso `secure` é sempre true (não apenas em produção).
     sameSite: 'none' as const,
     secure: true,
     path: '/',

@@ -14,7 +14,6 @@ export const Route = createFileRoute('/_auth/register')({
   validateSearch: (search: Record<string, unknown>) => ({
     redirect_uri: typeof search.redirect_uri === 'string' ? search.redirect_uri : undefined,
   }),
-  // Já logado não deve ver o cadastro. Completa o OIDC se houver, senão vai pra conta.
   beforeLoad: async ({ search }) => {
     const user = await getSession()
     if (!user) return
@@ -164,7 +163,7 @@ function RegisterPage() {
           <PasswordStrengthMeter password={password} />
         </div>
 
-        {/* Terms */}
+        {}
         <div>
           <label className="flex items-start gap-2.5 cursor-pointer select-none mb-0 font-normal text-ink-500">
             <input

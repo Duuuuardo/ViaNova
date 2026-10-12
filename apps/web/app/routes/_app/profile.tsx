@@ -53,7 +53,6 @@ function ProfilePage() {
     }
   }
 
-  // Personal data
   const [name, setName] = useState(user.name)
   const [nameError, setNameError] = useState<string | null>(null)
   const [phone, setPhone] = useState(user.phone ?? '')
@@ -62,7 +61,6 @@ function ProfilePage() {
   const [frame, setFrame] = useState<AvatarFrame>((user.avatarFrame as AvatarFrame) ?? 'none')
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? null)
 
-  // Localization & Preferences
   const [location, setLocation] = useState((user as Record<string, any>).location ?? '')
   const [timezone, setTimezone] = useState((user as Record<string, any>).timezone ?? 'America/Sao_Paulo')
   const [locale, setLocale] = useState((user as Record<string, any>).locale ?? 'pt-BR')
@@ -76,7 +74,6 @@ function ProfilePage() {
   }
   const [preferences, setPreferences] = useState(initialPrefs)
 
-  // Feedback states
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -187,7 +184,7 @@ function ProfilePage() {
 
   return (
     <div className="max-w-4xl space-y-8 pb-12">
-      {/* Alerta de Carência de 15 Dias (se agendado) */}
+      {}
       {(user as any).scheduledForDeletionAt && (
         <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -711,7 +708,6 @@ function LocationSelector({ location, onChangeLocation }: { location: string; on
   const [loadingStates, setLoadingStates] = useState(false)
   const [loadingCities, setLoadingCities] = useState(false)
 
-  // Fetch IBGE states when country is Brasil
   useEffect(() => {
     if (country !== 'Brasil') return
     let active = true
@@ -728,7 +724,6 @@ function LocationSelector({ location, onChangeLocation }: { location: string; on
     return () => { active = false }
   }, [country])
 
-  // Fetch IBGE cities when stateUF changes and country is Brasil
   useEffect(() => {
     if (country !== 'Brasil' || !stateUF) {
       setCities([])
@@ -748,7 +743,6 @@ function LocationSelector({ location, onChangeLocation }: { location: string; on
     return () => { active = false }
   }, [country, stateUF])
 
-  // Sync back to parent location string
   useEffect(() => {
     if (country === 'Brasil') {
       if (cityName && stateUF) {
@@ -779,7 +773,7 @@ function LocationSelector({ location, onChangeLocation }: { location: string; on
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* País */}
+        {}
         <Field label="País" htmlFor="country">
           <select
             id="country"
@@ -807,7 +801,7 @@ function LocationSelector({ location, onChangeLocation }: { location: string; on
           </select>
         </Field>
 
-        {/* Estado / UF */}
+        {}
         {country === 'Brasil' ? (
           <Field label="Estado (UF)" htmlFor="stateUF">
             <select
@@ -841,7 +835,7 @@ function LocationSelector({ location, onChangeLocation }: { location: string; on
           </Field>
         )}
 
-        {/* Cidade */}
+        {}
         {country === 'Brasil' ? (
           <Field label="Cidade" htmlFor="cityName">
             <select

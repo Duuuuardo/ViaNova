@@ -3,8 +3,6 @@ name: vianova-prod
 networks:
   novaplatform:
     external: true
-  # Rede interna isolada: banco, Redis e MinIO só são alcançáveis pelos
-  # serviços do Vianova que se conectam explicitamente a ela.
   vianova-internal:
     driver: bridge
     internal: true
@@ -58,8 +56,6 @@ services:
     networks:
       - vianova-internal
 
-  # Garante a existência dos buckets antes de a API aceitar uploads. O comando
-  # é idempotente, portanto também é seguro em redeploys e com volume já criado.
   minio-init:
     image: minio/mc:latest
     restart: "no"
@@ -130,8 +126,6 @@ services:
     env_file:
       - ./.env
 
-  # Config server: em produção fica apenas na rede interna e no loopback.
-  # NUNCA adicione um server_name/config.vianova.software público para ele.
   config-server:
     image: ${REGISTRY}/vianova-config-server:${IMAGE_TAG:-latest}
     restart: unless-stopped

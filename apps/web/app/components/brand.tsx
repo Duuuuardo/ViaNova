@@ -1,4 +1,3 @@
-// Marca do Vianova: duas vias convergindo num ponto — o "V" da Vianova.
 export function ViaMark({ size = 16 }: { size?: number }) {
   return (
     <svg
@@ -41,8 +40,6 @@ export function ViaLogo({ dark = false, size = 28 }: { dark?: boolean; size?: nu
   )
 }
 
-// Assinatura da casa: a linha de rota. Sinaliza de onde você vem e para onde
-// o login te leva (usada no fluxo OIDC vindo de um produto).
 export function RouteLine({ destination }: { destination: string }) {
   return (
     <div className="flex items-center gap-2 text-xs font-mono text-ink-500">

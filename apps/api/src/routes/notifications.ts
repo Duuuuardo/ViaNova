@@ -33,7 +33,6 @@ function verifyInternalSecret(headers: Headers): boolean {
 export const notificationRoutes = new Elysia()
   .use(authPlugin)
 
-  // Lista de notificações da conta logada.
   .get(
     '/notifications',
     async ({ session, query, set }) => {
@@ -80,7 +79,6 @@ export const notificationRoutes = new Elysia()
     },
   )
 
-  // Marca uma notificação como lida.
   .post(
     '/notifications/:id/read',
     async ({ session, params, set }) => {
@@ -107,7 +105,6 @@ export const notificationRoutes = new Elysia()
     },
   )
 
-  // Marca todas as notificações como lidas.
   .post('/notifications/read-all', async ({ session, set }) => {
     if (!session) {
       set.status = 401
@@ -123,7 +120,6 @@ export const notificationRoutes = new Elysia()
     return { marked: rows.length }
   })
 
-  // Contagem rápida de não lidas (para o badge do header).
   .get('/notifications/unread-count', async ({ session, set }) => {
     if (!session) {
       set.status = 401
@@ -138,12 +134,6 @@ export const notificationRoutes = new Elysia()
     return { count: row?.value ?? 0 }
   })
 
-  // Endpoint service-to-service: produtos criam notificações na conta Vianova.
-  // Aceita token de serviço com scope `service:notifications:write` ou o
-  // segredo interno compartilhado (`x-internal-secret`), conforme o padrão
-  // usado em /internal/billing/ensure-free-subscription.
-  // Opcionalmente envia email (send_email) — o Vianova usa suas próprias
-  // preferências de usuário para decidir se dispara o SMTP.
   .post(
     '/internal/notifications',
     async ({ request, body, set }) => {

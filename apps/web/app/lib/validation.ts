@@ -1,8 +1,3 @@
-/**
- * Validação client-side dos forms.
- * As regras de senha espelham a policy do servidor (apps/api/src/lib/password-policy.ts)
- * — mudou lá, muda aqui.
- */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
@@ -21,7 +16,6 @@ export function validateName(name: string): string | null {
   return null
 }
 
-// Senhas frequentes em vazamentos que passariam nas regras de tamanho.
 const COMMON_PASSWORDS = new Set([
   '12345678',
   '123456789',
@@ -46,7 +40,6 @@ export type PasswordChecks = {
 }
 
 export type PasswordStrength = {
-  /** 0–4: 0–1 fraca, 2 média, 3 boa, 4 forte */
   score: 0 | 1 | 2 | 3 | 4
   label: 'Fraca' | 'Média' | 'Boa' | 'Forte'
   checks: PasswordChecks
@@ -61,7 +54,6 @@ export function passwordStrength(password: string): PasswordStrength {
   }
 
   let score = Object.values(checks).filter(Boolean).length
-  // Senha comum ou curta nunca passa de "fraca", por mais variada que seja.
   if (!checks.minLength || COMMON_PASSWORDS.has(password.toLowerCase())) {
     score = Math.min(score, 1)
   }
@@ -70,7 +62,6 @@ export function passwordStrength(password: string): PasswordStrength {
   return { score: score as PasswordStrength['score'], label: labels[score], checks }
 }
 
-/** Policy mínima para aceitar uma senha nova (registro, redefinição, troca). */
 export function validateNewPassword(password: string): string | null {
   if (!password) return 'Crie uma senha.'
   if (password.length < 8) return 'A senha deve ter no mínimo 8 caracteres.'

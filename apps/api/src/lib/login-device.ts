@@ -53,8 +53,6 @@ export async function recordLoginDevice({
     }
   }
 
-  // Um mesmo navegador pode ser usado por mais de uma conta. Nesse caso o
-  // cookie continua estável, mas cada usuário ganha seu próprio vínculo.
   const token = deviceToken ?? generateToken()
   await db.insert(loginDevices).values({
     id: generateId(),

@@ -81,8 +81,6 @@ function getCorsOriginHandler(): string | string[] | RegExp | ((request: Request
 }
 
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000)
-// Limite generoso para não atrapalhar produtos que fazem muitas chamadas
-// de config ao iniciar. Ajustável via env.
 const rateLimitMax = Number(process.env.RATE_LIMIT_MAX ?? 1_000)
 
 const app = new Elysia()

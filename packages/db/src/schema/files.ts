@@ -2,8 +2,6 @@ import { pgTable, text, timestamp, integer, index } from 'drizzle-orm/pg-core'
 import { productCatalog } from './catalog'
 import { users } from './users'
 
-// Arquivos de workspaces de produto armazenados no MinIO do Vianova.
-// Escopados a (product_slug, workspace_id) — o workspace vive no banco do produto.
 export const workspaceFiles = pgTable(
   'workspace_files',
   {
@@ -21,7 +19,7 @@ export const workspaceFiles = pgTable(
     s3Key: text('s3_key').notNull().unique(),
     s3Bucket: text('s3_bucket').notNull().default('vianova-files'),
     sha256: text('sha256'),
-    status: text('status').notNull().default('active'), // active | trashed
+    status: text('status').notNull().default('active'),
     trashedAt: timestamp('trashed_at'),
     trashedBy: text('trashed_by').references(() => users.id),
     createdAt: timestamp('created_at').defaultNow().notNull(),

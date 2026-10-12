@@ -15,9 +15,7 @@ function hashSecret(secret: string): string {
   return createHmac('sha256', requireEnv('TOKEN_HASH_SALT')).update(secret).digest('hex')
 }
 
-// Secret OIDC de dev do produto naia — em produção, gerar e distribuir fora do seed.
 const NAIA_DEV_CLIENT_SECRET = requireEnv('NAIA_OIDC_CLIENT_SECRET')
-// Secret OIDC de dev do produto naia-crm (client OIDC próprio do CRM).
 const CRM_DEV_CLIENT_SECRET = requireEnv('CRM_OIDC_CLIENT_SECRET')
 
 async function seed() {
@@ -103,7 +101,6 @@ async function seed() {
   ]
 
   for (const plan of plans) {
-    // Re-runs não zeram o stripePriceId gravado pelo bootstrap do Stripe.
     const { stripePriceId, ...rest } = plan
     await db
       .insert(productPlans)
@@ -204,7 +201,6 @@ async function seed() {
       })
   }
 
-  // ─── Produto naia-crm (Naia CRM) — client OIDC e planos próprios ────────────
   const crmRedirectUris = [
     `${requireEnv('CRM_WEB_URL')}/auth/callback`,
     'http://localhost:3002/auth/callback',
@@ -236,9 +232,6 @@ async function seed() {
       },
     })
 
-  // Planos do CRM. As chaves de `limits` batem com o que o crm-api mapeia em
-  // POST /internal/entitlements: agents, connections, activeConversations,
-  // managersLimit (gerentes do painel; -1 = ilimitado).
   const crmPlans = [
     {
       id: 'naia-crm-free',

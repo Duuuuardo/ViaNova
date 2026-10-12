@@ -100,7 +100,6 @@ export function StatusDot({ tone }: { tone: 'ok' | 'warn' | 'danger' | 'muted' }
   return <span className={`inline-block size-2 rounded-full ${colors[tone]}`} aria-hidden="true" />
 }
 
-// ─── Switch & Toggle (Vianova Design System — #C466FF / #A63FE8) ─────────────
 
 export type SwitchSize = 'sm' | 'md'
 

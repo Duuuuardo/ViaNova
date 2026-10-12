@@ -35,8 +35,8 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     ports:
-      - "127.0.0.1:9100:9000" # S3 API
-      - "127.0.0.1:9101:9001" # Console
+      - "127.0.0.1:9100:9000"
+      - "127.0.0.1:9101:9001"
     environment:
       MINIO_ROOT_USER: ${VIANOVA_MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${VIANOVA_MINIO_ROOT_PASSWORD}
@@ -48,7 +48,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Cria os buckets do Vianova na primeira subida e encerra.
   minio-init:
     image: minio/mc:latest
     depends_on:
@@ -65,8 +64,8 @@ services:
     image: axllent/mailpit
     restart: unless-stopped
     ports:
-      - "127.0.0.1:1026:1025" # SMTP
-      - "127.0.0.1:8026:8025" # Web UI
+      - "127.0.0.1:1026:1025"
+      - "127.0.0.1:8026:8025"
 
   email-worker:
     image: oven/bun:1.3.14
@@ -87,8 +86,6 @@ services:
       redis:
         condition: service_healthy
 
-  # Config server: em dev expõe na loopback; em produção NÃO deve ser exposto
-  # publicamente — só via rede interna.
   config-server:
     image: oven/bun:1.3.14
     restart: unless-stopped

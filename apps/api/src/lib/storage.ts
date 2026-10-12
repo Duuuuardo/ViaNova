@@ -5,7 +5,6 @@ const S3_ENDPOINT = requireEnv('VIANOVA_S3_ENDPOINT')
 const S3_ACCESS_KEY = requireEnv('VIANOVA_S3_ACCESS_KEY')
 const S3_SECRET_KEY = requireEnv('VIANOVA_S3_SECRET_KEY')
 
-// Bucket exclusivo para avatares de conta. Nunca misturar com workspace files.
 const avatarsS3 = new S3Client({
   endpoint: S3_ENDPOINT,
   accessKeyId: S3_ACCESS_KEY,
@@ -13,7 +12,6 @@ const avatarsS3 = new S3Client({
   bucket: requireEnv('VIANOVA_AVATARS_BUCKET'),
 })
 
-// Bucket para arquivos de workspaces de produto (Vianova Storage).
 export const WORKSPACE_FILES_BUCKET = requireEnv('VIANOVA_FILES_BUCKET')
 const filesS3 = new S3Client({
   endpoint: S3_ENDPOINT,
@@ -22,7 +20,7 @@ const filesS3 = new S3Client({
   bucket: WORKSPACE_FILES_BUCKET,
 })
 
-export const AVATAR_MAX_BYTES = 2 * 1024 * 1024 // 2 MB
+export const AVATAR_MAX_BYTES = 2 * 1024 * 1024
 
 const AVATAR_TYPES: Record<string, string> = {
   'image/png': 'png',
@@ -58,7 +56,6 @@ export async function deleteAvatar(name: string) {
   await avatarsS3.delete(name).catch(() => {})
 }
 
-// --- Workspace files (Vianova Storage) ---
 
 export async function putWorkspaceFile(key: string, file: File) {
   await filesS3.write(key, file, { type: file.type })

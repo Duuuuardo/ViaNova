@@ -16,8 +16,6 @@ const API_URL = requireEnv('VIANOVA_API_URL')
 export const accountRoutes = new Elysia()
   .use(authPlugin)
 
-  // Upload do avatar da conta. A imagem vai pro MinIO do Vianova; o user
-  // guarda só a URL pública proxied pela API (vira o claim `picture`).
   .post(
     '/account/avatar',
     async ({ session, body, set }) => {
@@ -57,7 +55,6 @@ export const accountRoutes = new Elysia()
           avatarFrame: users.avatarFrame,
         })
 
-      // Limpa a foto anterior depois da troca — falha aqui não afeta o upload.
       const previous = current?.avatarUrl?.split('/files/avatars/')[1]
       if (previous) await deleteAvatar(previous)
 
@@ -70,8 +67,6 @@ export const accountRoutes = new Elysia()
     },
   )
 
-  // Leitura pública do avatar — o browser (de qualquer produto) busca aqui;
-  // a credencial S3 nunca sai da API.
   .get('/files/avatars/:name', async ({ params, set }) => {
     const found = await getAvatar(params.name)
     if (!found) {

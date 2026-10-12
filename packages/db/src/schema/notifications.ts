@@ -1,9 +1,6 @@
 import { pgTable, text, timestamp, index, jsonb } from 'drizzle-orm/pg-core'
 import { users } from './users'
 
-// Central de notificações da conta Vianova. Recebe eventos da própria
-// Vianova (billing, segurança) e de produtos conectados via endpoint
-// service-to-service (`POST /internal/notifications`).
 export const notifications = pgTable(
   'notifications',
   {
@@ -11,9 +8,7 @@ export const notifications = pgTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    // Categoria da notificação: billing, security, product, marketing.
     type: text('type').notNull(),
-    // Origem: 'vianova' ou o slug do produto (ex.: 'naia', 'naia-crm').
     source: text('source').notNull(),
     sourceProductSlug: text('source_product_slug'),
     sourceWorkspaceId: text('source_workspace_id'),

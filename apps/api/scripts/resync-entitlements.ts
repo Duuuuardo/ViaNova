@@ -1,8 +1,5 @@
 import { syncEntitlements } from '../src/lib/product-sync'
 
-// Re-executa o sync de entitlements de um workspace (útil quando o produto
-// estava offline no momento do webhook).
-// Uso: bun --env-file ../../.env scripts/resync-entitlements.ts <productSlug> <workspaceId>
 
 const [productSlug, workspaceId] = process.argv.slice(2)
 if (!productSlug || !workspaceId) {

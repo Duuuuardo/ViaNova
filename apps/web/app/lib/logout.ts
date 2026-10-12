@@ -32,8 +32,6 @@ export const endGlobalSession = createServerFn()
 
       return location
     } catch {
-      // Fallback seguro: se o proxy server-side falhar, o navegador acessa o
-      // endpoint público diretamente para não deixar a sessão global ativa.
       const fallback = new URL(`${publicApiUrl}/oidc/end_session`)
       if (data.postLogoutRedirectUri) {
         fallback.searchParams.set('post_logout_redirect_uri', data.postLogoutRedirectUri)

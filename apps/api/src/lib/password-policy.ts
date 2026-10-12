@@ -1,8 +1,3 @@
-/**
- * Policy de senha nova (registro, redefinição, troca).
- * O frontend espelha estas regras em apps/web/app/lib/validation.ts — mudou aqui, muda lá.
- * Senhas existentes não são revalidadas no login.
- */
 
 const COMMON_PASSWORDS = new Set([
   '12345678',

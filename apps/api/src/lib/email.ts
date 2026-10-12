@@ -78,7 +78,6 @@ function baseTemplate(
 async function send(to: string, subject: string, html: string, ctaUrl: string, label: string) {
   const transporter = getTransporter()
   if (!transporter) {
-    // Dev sem SMTP: loga só metadata para não vazar tokens de uso único.
     console.log(`[email:dev] ${label}`)
     return
   }

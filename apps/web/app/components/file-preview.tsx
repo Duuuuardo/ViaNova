@@ -37,7 +37,6 @@ export function isImage(mimeType: string) {
   return mimeType.startsWith('image/')
 }
 
-// SVG pode conter scripts; nunca renderizamos inline como <img> até sanitizar.
 export function isSafeInlineImage(mimeType: string) {
   return isImage(mimeType) && mimeType !== 'image/svg+xml'
 }

@@ -2,11 +2,6 @@ import Stripe from 'stripe'
 import { db, productPlans, productAddonTypes } from '@vianova/db'
 import { eq, gt, and } from 'drizzle-orm'
 
-// Garante que todo plano/add-on pago do catálogo tenha um price recorrente no
-// Stripe e grava o stripe_price_id de volta no banco. Idempotente: usa o id do
-// catálogo como lookup_key do price — re-rodar não duplica nada.
-//
-// Uso: bun --env-file ../../.env scripts/stripe-bootstrap.ts
 
 const key = process.env.STRIPE_SECRET_KEY
 if (!key) {

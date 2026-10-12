@@ -35,10 +35,6 @@ function verifyInternalSecret(headers: Headers): boolean {
   return verifySecret(headers.get('x-internal-secret'), INTERNAL_SECRET)
 }
 
-// Emissão de token de serviço escopado (Vianova → produto). Autenticado pelo
-// segredo administrativo interno — nunca por JWT de usuário nem client secret
-// de produto. Uso normal é interno (fila de sync); a rota existe para
-// operação/testes e futuros processos separados do Vianova.
 export const internalRoutes = new Elysia({ prefix: '/internal' })
 
   .post(
@@ -80,9 +76,6 @@ export const internalRoutes = new Elysia({ prefix: '/internal' })
     },
   )
 
-  // Endpoint service-to-service: produtos enfileiram emails para a Vianova enviar.
-  // Aceita token de serviço com scope `service:email:send` ou o segredo interno
-  // compartilhado (`x-internal-secret`).
   .post(
     '/email/enqueue',
     async ({ request, body, set }) => {
@@ -124,7 +117,6 @@ export const internalRoutes = new Elysia({ prefix: '/internal' })
     },
   )
 
-  // Feature flags ativas para produtos. Cacheável por produto.
   .get(
     '/feature-flags',
     async ({ request, query, set }) => {

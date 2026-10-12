@@ -1,11 +1,8 @@
 import { Elysia } from 'elysia'
 
 export interface RateLimitOptions {
-  /** Janela de tempo em ms. Padrão: 60_000 (1 minuto). */
   windowMs?: number
-  /** Máximo de requisições por janela. Padrão: 100. */
   max?: number
-  /** Prefixo da chave no store. Padrão: 'rl'. */
   keyPrefix?: string
 }
 

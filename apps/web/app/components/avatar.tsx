@@ -6,9 +6,6 @@ const sizes = {
   lg: 'size-16 text-xl',
 } as const
 
-// Moldura escolhida pelo usuário na conta Vianova — acompanha o avatar em
-// todos os produtos (claim picture_frame). Implementada como um anel de
-// gradiente/cor ao redor da foto.
 const frames: Record<AvatarFrame, string> = {
   none: 'p-0 bg-transparent',
   via: 'p-[2.5px] bg-via-500',

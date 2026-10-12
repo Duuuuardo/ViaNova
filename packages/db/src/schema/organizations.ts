@@ -1,8 +1,6 @@
 import { pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
 import { users } from './users'
 
-// Organização é agrupamento de exibição — nunca titular de assinatura.
-// Controle de acesso de fato acontece no workspace de cada produto.
 export const organizations = pgTable('organizations', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),

@@ -3,15 +3,6 @@ import { House, RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { ViaLogo } from './brand'
 
-/*
- * Telas de erro da marca Vianova. O elemento-assinatura deriva da marca (vias
- * que convergem num ponto — a linha de rota): no 404 a rota tracejada termina
- * num destino vazio; no 500 a rota se rompe antes de chegar ao ponto.
- *
- * Duas variantes: a página inteira (rotas sem shell) e a embutida, usada como
- * notFoundComponent/errorComponent de layouts logados — sem logo (a topbar já
- * tem a marca) e sem fundo próprio, para herdar o fundo do conteúdo.
- */
 
 const VIA = '#A63FE8'
 
@@ -195,9 +186,6 @@ export function NotFoundEmbedded() {
 }
 
 export function ErrorPage(props: ErrorComponentProps) {
-  // Erros em rotas filhas do shell logado renderizam dentro do Outlet do
-  // layout — nesse caso usa a variante embutida para herdar o fundo do
-  // conteúdo e não repetir a marca que a topbar já mostra.
   const match = useMatch({ strict: false })
   const insideShell = String(match.routeId).startsWith('/_app/')
   return <ErrorContent embedded={insideShell} {...props} />

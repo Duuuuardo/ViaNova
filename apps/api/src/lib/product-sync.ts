@@ -3,8 +3,6 @@ import { eq, and } from 'drizzle-orm'
 import { signServiceToken } from '@vianova/oidc'
 import { resolveEntitlementAccess } from './entitlement-state'
 
-// Canal service-to-service Vianova → produto. O produto é quem escreve o
-// entitlement no próprio banco — o Vianova só empurra o estado consolidado.
 
 async function getProduct(slug: string) {
   const [product] = await db
@@ -38,8 +36,6 @@ async function postToProduct<T = unknown>(
     throw new Error(`[product-sync] ${productSlug} indisponível em ${apiUrl}${path}`, { cause: err })
   }
 
-  // 4xx = o produto não implementa/reconhece o endpoint — retry não resolve.
-  // 5xx = falha transitória, deixa a fila re-tentar.
   if (res.status >= 500) {
     throw new Error(`[product-sync] ${productSlug}${path} respondeu ${res.status}`)
   }
@@ -118,8 +114,6 @@ export async function getFromProduct<T = unknown>(
   return { ok: true, data }
 }
 
-// Consolida plano + add-ons da assinatura de um workspace.
-// Exportado para reutilização em quota de arquivos.
 export async function resolveWorkspaceLimits(
   productSlug: string,
   workspaceId: string,
@@ -168,8 +162,6 @@ export async function resolveWorkspaceLimits(
   }
 }
 
-// Consolida plano + add-ons da assinatura e sincroniza no produto via
-// POST {product.api_url}/internal/entitlements.
 export async function syncEntitlements(productSlug: string, workspaceId: string) {
   const product = await getProduct(productSlug)
   if (!product) throw new Error(`Produto ${productSlug} não existe no catálogo`)
@@ -187,8 +179,6 @@ export async function syncEntitlements(productSlug: string, workspaceId: string)
   })
 }
 
-// Concede créditos de disparo ao workspace do produto após pagamento.
-// Chamado em invoice.paid para subscription_create e subscription_cycle.
 export async function grantCredits(productSlug: string, workspaceId: string, amount: number) {
   const product = await getProduct(productSlug)
   if (!product) return
@@ -200,8 +190,6 @@ export async function grantCredits(productSlug: string, workspaceId: string, amo
   })
 }
 
-// Zera o saldo de créditos do workspace em estorno, chargeback ou cancelamento
-// de subscription paga. Quem concede pode resetar.
 export async function resetCredits(productSlug: string, workspaceId: string) {
   const product = await getProduct(productSlug)
   if (!product) return
@@ -212,9 +200,6 @@ export async function resetCredits(productSlug: string, workspaceId: string) {
   })
 }
 
-// Single sign-out: avisa todos os produtos ativos que as sessões caíram.
-// Complementa a introspection síncrona (produtos também consultam
-// POST /oidc/introspect em pontos sensíveis).
 export async function notifySessionRevoked(userId: string, sessionIds: string[]) {
   const products = await db
     .select()
@@ -222,11 +207,7 @@ export async function notifySessionRevoked(userId: string, sessionIds: string[])
     .where(eq(productCatalog.isActive, true))
 
   for (const product of products) {
-    // Um produto indisponível não pode impedir a revogação nos demais.
     try {
-      // O catálogo pode ter sido criado antes de uma mudança de domínio. Para
-      // o Campaigns, a URL de ambiente do deploy tem precedência no caminho
-      // crítico de logout; o seed também passa a reconciliar esse campo.
       const apiUrl = product.slug === 'naia'
         ? (process.env.NAIA_API_URL ?? product.apiUrl)
         : product.apiUrl

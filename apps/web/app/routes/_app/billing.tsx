@@ -171,7 +171,6 @@ function SubscriptionCard({
     (item.plan?.priceCents ?? 0) +
     item.addons.reduce((sum, addon) => sum + addon.priceCents * addon.quantity, 0)
 
-  // Limites efetivos = plano + add-ons, igual ao entitlement sincronizado.
   const effectiveLimits: Record<string, number> = { ...(item.plan?.limits ?? {}) }
   for (const addon of item.addons) {
     for (const [key, perUnit] of Object.entries(addon.limitsPerUnit)) {

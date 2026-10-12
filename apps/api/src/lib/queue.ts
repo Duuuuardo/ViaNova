@@ -6,9 +6,6 @@ import { deleteWorkspaceFile } from './storage'
 import { sendRenewalReminders } from './billing-reminders'
 import { requireEnv } from './env'
 
-// Trabalho assíncrono (sync de entitlements, revogação de sessão nos produtos)
-// nunca roda síncrono numa resposta HTTP — sempre via fila.
-// No Milestone 1 o worker roda in-process na API (deploy único).
 
 const QUEUE_NAME = 'vianova'
 
@@ -79,7 +76,6 @@ export async function enqueue(job: VianovaJob) {
   }
 }
 
-// Remove arquivos na lixeira há mais de 30 dias (hard delete no MinIO + banco).
 export async function cleanupTrashedFiles() {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
@@ -142,8 +138,6 @@ export function startWorker() {
     console.error('[queue] worker error:', err.message)
   })
 
-  // Agenda o primeiro cleanup no startup com jobId fixo para evitar
-  // filas duplicadas a cada hot-reload do dev server.
   getQueue()
     .add(
       'files:cleanup',
@@ -159,7 +153,6 @@ export function startWorker() {
     )
     .catch(() => {})
 
-  // Lembrete de renovação: roda uma vez por dia ao meio-dia.
   getQueue()
     .add(
       'billing:reminder',

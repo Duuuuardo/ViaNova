@@ -6,7 +6,6 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash'),
   name: text('name').notNull(),
   avatarUrl: text('avatar_url'),
-  // Moldura do avatar escolhida pelo usuário na conta: none | via | gradient.
   avatarFrame: text('avatar_frame').notNull().default('none'),
   phone: text('phone'),
   jobTitle: text('job_title'),
