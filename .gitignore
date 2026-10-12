@@ -7,5 +7,7 @@ dist/
 .nitro/
 .turbo/
 .env
+.env.*
+!.env.example
 *.local
 .DS_Store
