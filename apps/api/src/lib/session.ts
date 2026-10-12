@@ -47,8 +47,6 @@ export async function validateSession(
   return { userId: session.userId, sessionId: session.id }
 }
 
-// Valida um JWT de usuário (ex.: token emitido para produtos via /oidc/token)
-// e retorna uma sessão virtual se a sessão de origem ainda estiver ativa.
 export async function validateJwtSession(
   jwt: string,
 ): Promise<{ userId: string; sessionId: string } | null> {
@@ -63,17 +61,7 @@ export async function deleteSession(token: string): Promise<string | null> {
     .delete(sessions)
     .where(eq(sessions.tokenHash, tokenHash))
     .returning({ id: sessions.id, userId: sessions.userId })
-  // ON DELETE CASCADE no FK oidcRefreshTokens.sessionId → sessions.id
-  // garante que os refresh tokens associados são deletados automaticamente.
   return deleted?.id ?? null
-}
-
-export async function deleteAllUserSessions(userId: string): Promise<string[]> {
-  const deleted = await db
-    .delete(sessions)
-    .where(eq(sessions.userId, userId))
-    .returning({ id: sessions.id })
-  return deleted.map((s) => s.id)
 }
 
 export async function createLoginChallenge(
@@ -105,8 +93,8 @@ export async function validateLoginChallenge(
   const now = new Date()
 
   const [challenge] = await db
-    .select()
-    .from(loginChallenges)
+    .update(loginChallenges)
+    .set({ usedAt: now })
     .where(
       and(
         eq(loginChallenges.tokenHash, tokenHash),
@@ -114,14 +102,8 @@ export async function validateLoginChallenge(
         isNull(loginChallenges.usedAt),
       ),
     )
-    .limit(1)
+    .returning({ userId: loginChallenges.userId, challengeId: loginChallenges.id })
 
   if (!challenge) return null
-
-  await db
-    .update(loginChallenges)
-    .set({ usedAt: now })
-    .where(eq(loginChallenges.id, challenge.id))
-
-  return { userId: challenge.userId, challengeId: challenge.id }
+  return { userId: challenge.userId, challengeId: challenge.challengeId }
 }

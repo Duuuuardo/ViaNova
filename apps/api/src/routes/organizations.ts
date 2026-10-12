@@ -50,15 +50,19 @@ export const organizationRoutes = new Elysia({ prefix: '/organizations' })
       }
 
       const orgId = generateId()
-      const [organization] = await db
-        .insert(organizations)
-        .values({ id: orgId, name: body.name, ownerUserId: session.userId })
-        .returning()
+      const organization = await db.transaction(async (tx) => {
+        const [org] = await tx
+          .insert(organizations)
+          .values({ id: orgId, name: body.name, ownerUserId: session.userId })
+          .returning()
 
-      await db.insert(organizationMembers).values({
-        id: generateId(),
-        organizationId: orgId,
-        userId: session.userId,
+        await tx.insert(organizationMembers).values({
+          id: generateId(),
+          organizationId: orgId,
+          userId: session.userId,
+        })
+
+        return org
       })
 
       return { organization }

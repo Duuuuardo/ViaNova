@@ -2,7 +2,7 @@ import { Elysia, t } from 'elysia'
 import { db, users, emailVerifications, passwordResets, totpSecrets, sessions } from '@vianova/db'
 import { eq, and, gt, isNull, ne } from 'drizzle-orm'
 import { generateId, generateToken, hashToken, generateBackupCodes } from '../lib/crypto'
-import { createSession, deleteSession, deleteAllUserSessions, SESSION_COOKIE, createLoginChallenge, validateLoginChallenge } from '../lib/session'
+import { createSession, deleteSession, SESSION_COOKIE, createLoginChallenge, validateLoginChallenge } from '../lib/session'
 import { sendVerificationEmail, sendPasswordResetEmail, sendSecurityAlertEmail } from '../lib/email'
 import { generateTotpSecret, getTotpUri, verifyTotp } from '../lib/totp'
 import { notifySessionRevoked } from '../lib/product-sync'
@@ -48,8 +48,6 @@ async function securityNotify(
         to: user.email,
         name: user.name,
         send: (email, name) => sendSecurityAlertEmail(email, name, title, description),
-        // Mudanças críticas de senha/2FA nunca são silenciadas. O alerta de
-        // novo dispositivo verifica a preferência antes de chamar esta função.
         ignorePreference: true,
       },
     })
@@ -131,8 +129,6 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
       const verifyUrl = `${process.env.VIANOVA_WEB_URL}/verify-email?token=${token}`
       await sendVerificationEmail(email, name, verifyUrl)
 
-      // A conta nasce logada — a verificação de email não bloqueia o acesso,
-      // só mantém o aviso na interface até o link ser confirmado.
       const ip = getClientIp(request)
       const userAgent = request.headers.get('user-agent') ?? undefined
       const { token: sessionToken } = await createSession(userId, ip, userAgent)
@@ -290,8 +286,6 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 
       const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
 
-      // Geolocalização e notificação rodam fora do caminho crítico: até timeout,
-      // limite diário ou indisponibilidade do terceiro nunca atrasam o login.
       const networkChanged = loginDevice.isNew || (
         getIpNetworkKey(ip) !== getIpNetworkKey(loginDevice.previousIp ?? undefined)
       )
@@ -306,8 +300,6 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
             loginDevice.previousLocationKey &&
             location.key !== loginDevice.previousLocationKey,
           )
-          // Se o serviço gratuito estiver indisponível, a mudança de rede ainda
-          // gera o alerta fail-safe, apenas sem afirmar uma localização.
           if (loginDevice.isNew || locationChanged || !location) {
             await notifyUnusualLogin(userId, location, ip, userAgent)
           }
@@ -330,7 +322,6 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     {
       body: t.Object({
         email: t.Optional(t.String({ format: 'email', maxLength: 254 })),
-        // Sem policy aqui: senhas antigas continuam válidas no login; o teto só barra payload abusivo.
         password: t.Optional(t.String({ maxLength: 512 })),
         totpCode: t.Optional(t.String({ maxLength: 64 })),
         challengeToken: t.Optional(t.String({ maxLength: 512 })),
@@ -347,16 +338,12 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     const token = cookie[SESSION_COOKIE]?.value as string | undefined
     if (token) {
       const deletedSessionId = await deleteSession(token)
-      // Single sign-out imediato: derruba a sessão nos produtos via webhook de
-      // revogação; a introspection também passa a responder active: false.
       if (deletedSessionId) {
-        // Revogação de sessão não pode esperar a fila: o produto precisa
-        // rejeitar o JWT antes de esta resposta de logout terminar.
         await notifySessionRevoked(session.userId, [deletedSessionId])
       }
     }
 
-    cookie[SESSION_COOKIE].set({ value: '', maxAge: 0, path: '/' })
+    cookie[SESSION_COOKIE].set({ value: '', ...getCookieOptions(), maxAge: 0 })
 
     return { message: 'Sessão encerrada.' }
   })
@@ -445,7 +432,6 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     {
       body: t.Object({
         name: t.Optional(t.String({ minLength: 1 })),
-        // Foto entra só via POST /account/avatar (MinIO) — aqui só a moldura.
         avatarFrame: t.Optional(
           t.Union([t.Literal('none'), t.Literal('via'), t.Literal('gradient')]),
         ),
@@ -511,7 +497,6 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         return { message: 'Email já verificado.' }
       }
 
-      // Rate limit: 60s entre reenvios
       const [recent] = await db
         .select()
         .from(emailVerifications)
@@ -582,34 +567,43 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
       const tokenHash = hashToken(body.token)
       const now = new Date()
 
-      const [reset] = await db
-        .select()
-        .from(passwordResets)
-        .where(
-          and(
-            eq(passwordResets.tokenHash, tokenHash),
-            isNull(passwordResets.usedAt),
-            gt(passwordResets.expiresAt, now),
-          ),
-        )
-        .limit(1)
+      const passwordHash = await Bun.password.hash(body.password, 'argon2id')
 
-      if (!reset) {
+      const result = await db.transaction(async (tx) => {
+        const [reset] = await tx
+          .update(passwordResets)
+          .set({ usedAt: now })
+          .where(
+            and(
+              eq(passwordResets.tokenHash, tokenHash),
+              isNull(passwordResets.usedAt),
+              gt(passwordResets.expiresAt, now),
+            ),
+          )
+          .returning({ id: passwordResets.id, userId: passwordResets.userId })
+
+        if (!reset) return null
+
+        await tx.update(users).set({ passwordHash }).where(eq(users.id, reset.userId))
+
+        const revoked = await tx
+          .delete(sessions)
+          .where(eq(sessions.userId, reset.userId))
+          .returning({ id: sessions.id })
+
+        return { userId: reset.userId, revokedSessionIds: revoked.map((s) => s.id) }
+      })
+
+      if (!result) {
         set.status = 400
         return { message: 'Token inválido ou expirado.' }
       }
 
-      const passwordHash = await Bun.password.hash(body.password, 'argon2id')
-
-      await db.update(users).set({ passwordHash }).where(eq(users.id, reset.userId))
-      await db.update(passwordResets).set({ usedAt: now }).where(eq(passwordResets.id, reset.id))
-
-      const revokedSessionIds = await deleteAllUserSessions(reset.userId)
-      if (revokedSessionIds.length > 0) {
-        await notifySessionRevoked(reset.userId, revokedSessionIds)
+      if (result.revokedSessionIds.length > 0) {
+        await notifySessionRevoked(result.userId, result.revokedSessionIds)
       }
 
-      await securityNotify(reset.userId, 'Senha redefinida', 'A senha da sua conta Vianova foi redefinida por meio do link de recuperação. Todas as sessões ativas foram encerradas.')
+      await securityNotify(result.userId, 'Senha redefinida', 'A senha da sua conta Vianova foi redefinida por meio do link de recuperação. Todas as sessões ativas foram encerradas.')
 
       return { message: 'Senha alterada com sucesso.' }
     },

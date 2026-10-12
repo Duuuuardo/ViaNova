@@ -19,6 +19,7 @@ import {
   shouldForceDownload,
   validateWorkspaceFile,
 } from '../lib/file-validation'
+import { decodeCursor, encodeCursor } from '../lib/pagination'
 import { authPlugin } from '../plugins/auth'
 import { requireEnv } from '../lib/env'
 import { getRequiredSecret, verifySecret } from '../lib/secrets'
@@ -26,13 +27,10 @@ import { getRequiredSecret, verifySecret } from '../lib/secrets'
 const API_URL = requireEnv('VIANOVA_API_URL')
 const INTERNAL_SECRET = getRequiredSecret('VIANOVA_INTERNAL_SECRET')
 
-// Validação mínima para rotas internas chamadas pelos produtos.
 function verifyInternalSecret(headers: Record<string, string | undefined>) {
   return verifySecret(headers['x-internal-secret'], INTERNAL_SECRET)
 }
 
-// Verifica se o usuário logado pode gerenciar o workspace no Vianova.
-// Regra: owner da subscription ou membro da organização vinculada.
 async function canManageWorkspace(
   userId: string,
   productSlug: string,
@@ -78,7 +76,6 @@ async function canViewWorkspace(
 export const filesRoutes = new Elysia()
   .use(authPlugin)
 
-  // --- Rotas internas (service-to-service, chamadas pelos produtos) ---
 
   .post(
     '/internal/files/upload',
@@ -149,20 +146,26 @@ export const filesRoutes = new Elysia()
 
       await putWorkspaceFile(s3Key, file)
 
-      const [record] = await db
-        .insert(workspaceFiles)
-        .values({
-          id,
-          productSlug,
-          workspaceId,
-          ownerUserId,
-          originalName: validation.sanitizedName,
-          mimeType: validation.mimeType,
-          sizeBytes: file.size,
-          s3Key,
-          s3Bucket: WORKSPACE_FILES_BUCKET,
-        })
-        .returning()
+      let record
+      try {
+        ;[record] = await db
+          .insert(workspaceFiles)
+          .values({
+            id,
+            productSlug,
+            workspaceId,
+            ownerUserId,
+            originalName: validation.sanitizedName,
+            mimeType: validation.mimeType,
+            sizeBytes: file.size,
+            s3Key,
+            s3Bucket: WORKSPACE_FILES_BUCKET,
+          })
+          .returning()
+      } catch (err) {
+        await deleteWorkspaceFile(s3Key).catch(() => {})
+        throw err
+      }
 
       return {
         id: record.id,
@@ -185,7 +188,7 @@ export const filesRoutes = new Elysia()
 
       const status = query.status === 'trashed' ? 'trashed' : 'active'
       const limit = Math.min(100, Math.max(1, Number(query.limit ?? 50)))
-      const cursor = typeof query.cursor === 'string' ? query.cursor : null
+      const cursor = typeof query.cursor === 'string' ? decodeCursor(query.cursor) : null
       const ownerUserId = typeof query.owner_user_id === 'string' ? query.owner_user_id : null
 
       const conditions = and(
@@ -193,22 +196,28 @@ export const filesRoutes = new Elysia()
         eq(workspaceFiles.workspaceId, query.workspace_id),
         eq(workspaceFiles.status, status),
         ownerUserId ? eq(workspaceFiles.ownerUserId, ownerUserId) : undefined,
-        cursor ? sql`${workspaceFiles.id} < ${cursor}` : undefined,
+        cursor
+          ? sql`(${workspaceFiles.createdAt}, ${workspaceFiles.id}) < (${cursor.createdAt}::timestamp, ${cursor.id})`
+          : undefined,
       )
 
       const rows = await db
-        .select()
+        .select({
+          row: workspaceFiles,
+          cursorTs: sql<string>`${workspaceFiles.createdAt}::text`,
+        })
         .from(workspaceFiles)
         .where(conditions)
-        .orderBy(desc(workspaceFiles.createdAt))
+        .orderBy(desc(workspaceFiles.createdAt), desc(workspaceFiles.id))
         .limit(limit + 1)
 
       const hasMore = rows.length > limit
       const items = hasMore ? rows.slice(0, -1) : rows
-      const nextCursor = hasMore ? items[items.length - 1]?.id : null
+      const last = items[items.length - 1]
+      const nextCursor = hasMore && last ? encodeCursor(last.cursorTs, last.row.id) : null
 
       return {
-        items: items.map((r) => ({
+        items: items.map(({ row: r }) => ({
           id: r.id,
           url: `${API_URL}/files/assets/${r.id}/${encodeURIComponent(r.originalName)}`,
           originalName: r.originalName,
@@ -328,7 +337,6 @@ export const filesRoutes = new Elysia()
         return { id: file.id, status: file.status }
       }
 
-      // Restaurar pode exceder a quota se o workspace encheu no meio tempo.
       const quotaCheck = await checkFileQuota(file.productSlug, file.workspaceId, file.sizeBytes)
       if (!quotaCheck.ok) {
         set.status = 402
@@ -348,7 +356,6 @@ export const filesRoutes = new Elysia()
     },
   )
 
-  // --- Leitura pública de arquivo (URL que o produto embeda em campanhas) ---
 
   .get(
     '/files/assets/:id/:filename',
@@ -388,7 +395,6 @@ export const filesRoutes = new Elysia()
     },
   )
 
-  // --- Rotas da UI Vianova (sessão cookie) ---
 
   .get('/files/workspaces', async ({ session, set }) => {
     if (!session) {
@@ -396,7 +402,6 @@ export const filesRoutes = new Elysia()
       return { message: 'Não autenticado.' }
     }
 
-    // Workspaces onde o usuário é dono.
     const owned = await db
       .select({
         subscriptionId: productSubscriptions.id,
@@ -407,7 +412,6 @@ export const filesRoutes = new Elysia()
       .from(productSubscriptions)
       .where(eq(productSubscriptions.ownerUserId, session.userId))
 
-    // Workspaces vinculados a organizações do qual o usuário é membro.
     const memberOrgs = await db
       .select({ organizationId: organizationMembers.organizationId })
       .from(organizationMembers)
@@ -472,21 +476,26 @@ export const filesRoutes = new Elysia()
 
       const status = query.status === 'trashed' ? 'trashed' : 'active'
       const limit = Math.min(100, Math.max(1, Number(query.limit ?? 50)))
-      const cursor = typeof query.cursor === 'string' ? query.cursor : null
+      const cursor = typeof query.cursor === 'string' ? decodeCursor(query.cursor) : null
 
       const conditions = and(
         eq(workspaceFiles.productSlug, params.productSlug),
         eq(workspaceFiles.workspaceId, params.workspaceId),
         eq(workspaceFiles.status, status),
-        cursor ? sql`${workspaceFiles.id} < ${cursor}` : undefined,
+        cursor
+          ? sql`(${workspaceFiles.createdAt}, ${workspaceFiles.id}) < (${cursor.createdAt}::timestamp, ${cursor.id})`
+          : undefined,
       )
 
       const [rows, limits, usage] = await Promise.all([
         db
-          .select()
+          .select({
+            row: workspaceFiles,
+            cursorTs: sql<string>`${workspaceFiles.createdAt}::text`,
+          })
           .from(workspaceFiles)
           .where(conditions)
-          .orderBy(desc(workspaceFiles.createdAt))
+          .orderBy(desc(workspaceFiles.createdAt), desc(workspaceFiles.id))
           .limit(limit + 1),
         getWorkspaceFileLimits(params.productSlug, params.workspaceId),
         getWorkspaceFileUsage(params.productSlug, params.workspaceId, 'active'),
@@ -494,7 +503,8 @@ export const filesRoutes = new Elysia()
 
       const hasMore = rows.length > limit
       const items = hasMore ? rows.slice(0, -1) : rows
-      const nextCursor = hasMore ? items[items.length - 1]?.id : null
+      const last = items[items.length - 1]
+      const nextCursor = hasMore && last ? encodeCursor(last.cursorTs, last.row.id) : null
 
       return {
         productSlug: params.productSlug,
@@ -504,7 +514,7 @@ export const filesRoutes = new Elysia()
         usedBytes: usage.usedBytes,
         fileCount: usage.fileCount,
         percent: limits.storageBytes > 0 ? Math.round((usage.usedBytes / limits.storageBytes) * 100) : 0,
-        items: items.map((r) => ({
+        items: items.map(({ row: r }) => ({
           id: r.id,
           url: `${API_URL}/files/assets/${r.id}/${encodeURIComponent(r.originalName)}`,
           originalName: r.originalName,

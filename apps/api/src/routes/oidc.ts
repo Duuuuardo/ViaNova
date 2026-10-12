@@ -9,7 +9,7 @@ import { authPlugin } from '../plugins/auth'
 import { getCookieOptions, requireEnv } from '../lib/env'
 import { deleteSession, SESSION_COOKIE } from '../lib/session'
 
-const AUTH_CODE_TTL_MS = 60 * 1000 // uso único, vida curta
+const AUTH_CODE_TTL_MS = 60 * 1000
 const REFRESH_TOKEN_TTL_DAYS = 30
 
 const WEB_URL = requireEnv('VIANOVA_WEB_URL')
@@ -29,8 +29,6 @@ function verifyClientSecret(client: { oidcClientSecretHash: string }, secret: st
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-// PKCE (RFC 7636). Só aceitamos S256 — `plain` é rejeitado. Comparação
-// timing-safe do challenge derivado do verifier contra o challenge armazenado.
 function verifyPkce(
   codeVerifier: string | undefined,
   challenge: string,
@@ -46,9 +44,6 @@ function verifyPkce(
 export const oidcRoutes = new Elysia()
   .use(authPlugin)
 
-  // Início do Authorization Code flow. Navegação de browser: com sessão ativa
-  // emite o código e volta pro produto; sem sessão, manda pro login do Vianova
-  // com o retorno apontando de volta pra cá.
   .get(
     '/oidc/authorize',
     async ({ query, session, set, redirect, request }) => {
@@ -60,7 +55,6 @@ export const oidcRoutes = new Elysia()
         return { message: 'client_id desconhecido.' }
       }
 
-      // redirect_uri inválido nunca recebe redirect — evita open redirect.
       if (!client.redirectUris.includes(redirect_uri)) {
         set.status = 400
         return { message: 'redirect_uri não registrado para este produto.' }
@@ -112,10 +106,6 @@ export const oidcRoutes = new Elysia()
     },
   )
 
-  // Troca código ou refresh token por JWT assinado. Chamada server-to-server,
-  // autenticada por client_secret. Suporta dois grant types:
-  //   authorization_code — troca código de autorização por access + refresh token
-  //   refresh_token      — rotaciona refresh token e emite novo par de tokens
   .post(
     '/oidc/token',
     async ({ body, set }) => {
@@ -125,7 +115,6 @@ export const oidcRoutes = new Elysia()
         return { error: 'invalid_client' as const }
       }
 
-      // ── refresh_token grant ─────────────────────────────────────────────────
       if (body.grant_type === 'refresh_token') {
         if (!body.refresh_token) {
           set.status = 400
@@ -136,8 +125,8 @@ export const oidcRoutes = new Elysia()
         const tokenHash = hashToken(body.refresh_token)
 
         const [existing] = await db
-          .select()
-          .from(oidcRefreshTokens)
+          .update(oidcRefreshTokens)
+          .set({ usedAt: now })
           .where(
             and(
               eq(oidcRefreshTokens.tokenHash, tokenHash),
@@ -146,14 +135,13 @@ export const oidcRoutes = new Elysia()
               eq(oidcRefreshTokens.clientSlug, client.slug),
             ),
           )
-          .limit(1)
+          .returning()
 
         if (!existing) {
           set.status = 400
           return { error: 'invalid_grant' as const }
         }
 
-        // Sessão Vianova ainda precisa estar ativa — refresh_token é amarrado ao sid.
         const [activeSession] = await db
           .select({ id: sessions.id })
           .from(sessions)
@@ -170,12 +158,6 @@ export const oidcRoutes = new Elysia()
           set.status = 400
           return { error: 'invalid_grant' as const }
         }
-
-        // Rotação: marca o token atual como usado e emite um novo par.
-        await db
-          .update(oidcRefreshTokens)
-          .set({ usedAt: now })
-          .where(eq(oidcRefreshTokens.id, existing.id))
 
         const newRefreshToken = generateToken()
         await db.insert(oidcRefreshTokens).values({
@@ -210,7 +192,6 @@ export const oidcRoutes = new Elysia()
         }
       }
 
-      // ── authorization_code grant ────────────────────────────────────────────
       if (body.grant_type !== 'authorization_code') {
         set.status = 400
         return { error: 'unsupported_grant_type' as const }
@@ -223,8 +204,8 @@ export const oidcRoutes = new Elysia()
 
       const now = new Date()
       const [authCode] = await db
-        .select()
-        .from(oidcAuthCodes)
+        .update(oidcAuthCodes)
+        .set({ usedAt: now })
         .where(
           and(
             eq(oidcAuthCodes.codeHash, hashToken(body.code)),
@@ -232,7 +213,7 @@ export const oidcRoutes = new Elysia()
             gt(oidcAuthCodes.expiresAt, now),
           ),
         )
-        .limit(1)
+        .returning()
 
       if (
         !authCode ||
@@ -243,21 +224,13 @@ export const oidcRoutes = new Elysia()
         return { error: 'invalid_grant' as const }
       }
 
-      // PKCE: se o código foi emitido com challenge, o verifier é obrigatório e
-      // tem que bater. Fecha injeção de código de autorização mesmo que o
-      // client_secret vaze ou o código seja interceptado.
       if (authCode.codeChallenge) {
         if (!verifyPkce(body.code_verifier, authCode.codeChallenge, authCode.codeChallengeMethod)) {
-          await db.update(oidcAuthCodes).set({ usedAt: now }).where(eq(oidcAuthCodes.id, authCode.id))
           set.status = 400
           return { error: 'invalid_grant' as const }
         }
       }
 
-      await db.update(oidcAuthCodes).set({ usedAt: now }).where(eq(oidcAuthCodes.id, authCode.id))
-
-      // Sessão precisa continuar viva entre o authorize e o token — logout no
-      // meio do fluxo invalida o código.
       const [activeSession] = await db
         .select({ id: sessions.id })
         .from(sessions)
@@ -321,8 +294,6 @@ export const oidcRoutes = new Elysia()
     },
   )
 
-  // Validação de sessão ativa — base do single sign-out. Consultada pelos
-  // produtos em pontos sensíveis.
   .post(
     '/oidc/introspect',
     async ({ body, set }) => {
@@ -343,10 +314,6 @@ export const oidcRoutes = new Elysia()
     },
   )
 
-  // RP-initiated logout (OIDC end_session). Recebe a sessão do Vianova via
-  // cookie, encerra-a e redireciona o browser de volta ao produto. É o único
-  // jeito de garantir que logout de um produto derruba a sessão no Vianova e,
-  // via webhook session:revoked, nos demais produtos.
   .get(
     '/oidc/end_session',
     async ({ query, session, cookie, redirect }) => {
@@ -357,16 +324,12 @@ export const oidcRoutes = new Elysia()
         if (token) {
           const deletedSessionId = await deleteSession(token)
           if (deletedSessionId) {
-            // Logout iniciado pelo produto também é logout global. Não use a
-            // fila aqui: ela só serve para trabalho eventual, não revogação.
             await notifySessionRevoked(session.userId, [deletedSessionId])
           }
         }
-        cookie[SESSION_COOKIE].set({ value: '', maxAge: 0, path: '/' })
+        cookie[SESSION_COOKIE].set({ value: '', ...getCookieOptions(), maxAge: 0 })
       }
 
-      // Valida o redirect_uri para evitar open redirect: só aceita URIs
-      // que pertençam a produtos registrados no catálogo.
       if (post_logout_redirect_uri) {
         const products = await db.select({ redirectUris: productCatalog.redirectUris }).from(productCatalog)
         const allUris = products.flatMap((p) => p.redirectUris)
