@@ -1,5 +1,10 @@
 # Vianova
 
+> **Status: open-sourced after shutdown.** Vianova ran in production at
+> `vianova.software` powering account, billing, and identity for the products
+> below. The services are no longer deployed — this repository is published
+> as-is for reference and portfolio, and is not actively maintained.
+
 Account, identity, and billing hub for a product ecosystem (`vianova.software`). It plays the "Atlassian ID" role: single account, 2FA, organizations, product catalog, billing portal, and an OIDC identity provider for the products (Naia and future ones). Stripe integration exists only in this repository.
 
 ## Structure
